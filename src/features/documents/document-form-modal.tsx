@@ -43,11 +43,11 @@ export function DocumentFormModal({ open, projectId, tasks, authorId, initialVal
     <Modal
       open={open}
       onClose={onClose}
-      title={initialValue ? 'Edit document' : 'Create document'}
-      description="Use simple structured text for now. This shape is ready to swap to a richer editor later."
+      title={initialValue ? '문서 수정' : '문서 생성'}
+      description="현재는 단순한 구조화 텍스트로 작성하고, 이후 더 풍부한 에디터로 교체할 수 있도록 유지합니다."
       footer={
         <div className="flex justify-end gap-3">
-          <Button variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button variant="secondary" onClick={onClose}>취소</Button>
           <Button
             onClick={() => {
               onSubmit({
@@ -61,22 +61,22 @@ export function DocumentFormModal({ open, projectId, tasks, authorId, initialVal
               onClose();
             }}
           >
-            {initialValue ? 'Save document' : 'Create document'}
+            {initialValue ? '문서 저장' : '문서 생성'}
           </Button>
         </div>
       }
     >
       <div className="grid gap-4">
-        <Field label="Title">
+        <Field label="제목">
           <Input value={title} onChange={(event) => setTitle(event.target.value)} />
         </Field>
-        <Field label="Tags" hint="Comma-separated tags help documents surface in project review.">
+        <Field label="태그" hint="쉼표로 구분된 태그는 프로젝트 검토 과정에서 문서를 쉽게 찾게 해줍니다.">
           <Input value={tagsInput} onChange={(event) => setTagsInput(event.target.value)} />
         </Field>
-        <Field label="Body">
+        <Field label="본문">
           <Textarea value={body} onChange={(event) => setBody(event.target.value)} className="min-h-[220px]" />
         </Field>
-        <Field label="Related tasks">
+        <Field label="관련 작업">
           <div className="grid gap-2 rounded-2xl border border-slate-200 p-3">
             {tasks.map((task) => (
               <label className="flex items-center gap-2 text-sm text-slate-700" key={task.id}>

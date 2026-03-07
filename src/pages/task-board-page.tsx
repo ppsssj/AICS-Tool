@@ -4,6 +4,7 @@ import { useLabStore } from '@/app/store/use-lab-store';
 import type { Task, TaskStatus } from '@/entities/models';
 import { TaskFormModal } from '@/features/tasks/task-form-modal';
 import { formatDate } from '@/shared/lib/date';
+import { taskPriorityLabels, taskStatusLabels } from '@/shared/lib/labels';
 import { Badge } from '@/shared/ui/badge';
 import { Button } from '@/shared/ui/button';
 import { Card } from '@/shared/ui/card';
@@ -25,23 +26,23 @@ export function TaskBoardPage() {
   const members = users.filter((user) => project?.memberIds.includes(user.id));
 
   if (!project) {
-    return <EmptyState title="Task board not found" description="The requested project does not exist." />;
+    return <EmptyState title="작업 보드를 찾을 수 없습니다" description="요청한 프로젝트가 존재하지 않습니다." />;
   }
 
   return (
     <div className="space-y-8">
       <PageHeader
-        title={`${project.title} task board`}
-        description="The kanban board remains lightweight, but the surfaces now emphasize status, due date, and document linkage with a calmer visual rhythm."
-        actions={<Button onClick={() => { setEditingTask(undefined); setShowModal(true); }}>Create task</Button>}
+        title={`${project.title} 작업 보드`}
+        description="칸반 보드는 가볍게 유지하되, 상태와 마감일, 연결 문서가 한눈에 들어오도록 정리했습니다."
+        actions={<Button onClick={() => { setEditingTask(undefined); setShowModal(true); }}>작업 생성</Button>}
       />
       <div className="grid gap-4 xl:grid-cols-4">
         {columns.map((column) => (
           <Card key={column} className="border-slate-200/70 p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Column</p>
-                <h2 className="mt-1 text-[18px] font-semibold tracking-[-0.02em] text-slate-950">{column}</h2>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">컬럼</p>
+                <h2 className="mt-1 text-[18px] font-semibold tracking-[-0.02em] text-slate-950">{taskStatusLabels[column]}</h2>
               </div>
               <Badge tone="neutral">{boardTasks.filter((task) => task.status === column).length}</Badge>
             </div>
@@ -51,22 +52,22 @@ export function TaskBoardPage() {
                 return (
                   <div key={task.id} className="rounded-[20px] border border-slate-200/80 bg-slate-50/75 p-4">
                     <div className="flex flex-wrap items-center gap-2">
-                      <Badge tone={task.priority === 'Urgent' ? 'danger' : task.priority === 'High' ? 'warning' : 'neutral'}>{task.priority}</Badge>
-                      {task.documentId ? <Badge tone="info">Linked doc</Badge> : null}
+                      <Badge tone={task.priority === 'Urgent' ? 'danger' : task.priority === 'High' ? 'warning' : 'neutral'}>{taskPriorityLabels[task.priority]}</Badge>
+                      {task.documentId ? <Badge tone="info">연결 문서</Badge> : null}
                     </div>
                     <h3 className="mt-3 text-[15px] font-semibold tracking-[-0.02em] text-slate-900">{task.title}</h3>
-                    <p className="mt-2 text-xs text-slate-500">{assignee?.name ?? 'Unassigned'}</p>
-                    <p className="mt-1 text-xs text-slate-500">Due {formatDate(task.dueDate)}</p>
+                    <p className="mt-2 text-xs text-slate-500">{assignee?.name ?? '미배정'}</p>
+                    <p className="mt-1 text-xs text-slate-500">마감 {formatDate(task.dueDate)}</p>
                     <div className="mt-3">
                       <Select value={task.status} onChange={(event) => updateTaskStatus(task.id, event.target.value as TaskStatus)}>
                         {columns.map((status) => (
-                          <option key={status} value={status}>{status}</option>
+                          <option key={status} value={status}>{taskStatusLabels[status]}</option>
                         ))}
                       </Select>
                     </div>
                     <div className="mt-3 flex gap-2">
-                      <Button variant="secondary" className="flex-1" onClick={() => { setEditingTask(task); setShowModal(true); }}>Edit</Button>
-                      <Button variant="ghost" className="flex-1" onClick={() => deleteTask(task.id)}>Delete</Button>
+                      <Button variant="secondary" className="flex-1" onClick={() => { setEditingTask(task); setShowModal(true); }}>수정</Button>
+                      <Button variant="ghost" className="flex-1" onClick={() => deleteTask(task.id)}>삭제</Button>
                     </div>
                   </div>
                 );

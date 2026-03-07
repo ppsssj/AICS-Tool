@@ -23,23 +23,23 @@ export function LoginForm() {
   return (
     <Card className="w-full max-w-md border-slate-200 bg-white/95 p-8 backdrop-blur">
       <div className="mb-8">
-        <p className="text-xs font-semibold uppercase tracking-[0.22em] text-accent-700">Internal Access</p>
-        <h1 className="mt-3 text-3xl font-semibold text-slate-950">Lab operations login</h1>
+        <p className="text-xs font-semibold uppercase tracking-[0.22em] text-accent-700">내부 접근</p>
+        <h1 className="mt-3 text-3xl font-semibold text-slate-950">연구실 운영 로그인</h1>
         <p className="mt-2 text-sm text-slate-500">
-          Use a mock account to enter the research lab workspace. The route protection is ready for a real backend later.
+          목업 계정으로 연구실 워크스페이스에 들어갈 수 있습니다. 이후 실제 백엔드 인증으로 연결하기 쉽도록 구성되어 있습니다.
         </p>
       </div>
       <form className="space-y-5" onSubmit={handleSubmit}>
-        <Field label="Email">
+        <Field label="이메일">
           <Input value={email} onChange={(event) => setEmail(event.target.value)} type="email" required />
         </Field>
-        <Field label="Password">
+        <Field label="비밀번호">
           <Input value={password} onChange={(event) => setPassword(event.target.value)} type="password" required />
         </Field>
-        <Button type="submit" fullWidth>Sign in to dashboard</Button>
+        <Button type="submit" fullWidth>대시보드로 로그인</Button>
       </form>
       <div className="mt-5 rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
-        Recommended demo account: <span className="font-semibold text-slate-900">alex.park@labflow.ai</span>
+        추천 데모 계정: <span className="font-semibold text-slate-900">alex.park@labflow.ai</span>
       </div>
     </Card>
   );

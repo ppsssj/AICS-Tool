@@ -22,7 +22,7 @@ export function Modal({ open, onClose, title, description, footer, children }: P
             <h3 className="text-[22px] font-semibold tracking-[-0.02em] text-slate-950">{title}</h3>
             {description ? <p className="mt-2 max-w-xl text-sm leading-6 text-slate-500">{description}</p> : null}
           </div>
-          <Button variant="ghost" onClick={onClose}>Close</Button>
+          <Button variant="ghost" onClick={onClose}>닫기</Button>
         </div>
         <div className="max-h-[70vh] overflow-y-auto px-7 py-6">{children}</div>
         {footer ? <div className="border-t border-slate-200/80 px-7 py-5">{footer}</div> : null}

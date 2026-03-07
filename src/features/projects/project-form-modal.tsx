@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { Project, ProjectStatus } from '@/entities/models';
+import { projectStatusLabels } from '@/shared/lib/labels';
 import { Button } from '@/shared/ui/button';
 import { Field, Input, Select, Textarea } from '@/shared/ui/field';
 import { Modal } from '@/shared/ui/modal';
@@ -43,31 +44,31 @@ export function ProjectFormModal({ open, users, initialValue, onClose, onSubmit 
     <Modal
       open={open}
       onClose={onClose}
-      title={initialValue ? 'Edit project' : 'Create project'}
-      description="Keep project setup lightweight. The goal is to get a research workflow operational quickly."
+      title={initialValue ? '프로젝트 수정' : '프로젝트 생성'}
+      description="프로젝트 설정은 가볍게 유지하고, 빠르게 연구 워크플로우를 시작할 수 있도록 구성합니다."
       footer={
         <div className="flex justify-end gap-3">
-          <Button variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button variant="secondary" onClick={onClose}>취소</Button>
           <Button onClick={() => { onSubmit({ title, description, status, memberIds }); onClose(); }}>
-            {initialValue ? 'Save changes' : 'Create project'}
+            {initialValue ? '변경 저장' : '프로젝트 생성'}
           </Button>
         </div>
       }
     >
       <div className="grid gap-4">
-        <Field label="Project title">
+        <Field label="프로젝트 제목">
           <Input value={title} onChange={(event) => setTitle(event.target.value)} />
         </Field>
-        <Field label="Description">
+        <Field label="설명">
           <Textarea value={description} onChange={(event) => setDescription(event.target.value)} />
         </Field>
         <div className="grid gap-4 md:grid-cols-2">
-          <Field label="Status">
+          <Field label="상태">
             <Select value={status} onChange={(event) => setStatus(event.target.value as ProjectStatus)}>
-              {statuses.map((item) => <option key={item} value={item}>{item}</option>)}
+              {statuses.map((item) => <option key={item} value={item}>{projectStatusLabels[item]}</option>)}
             </Select>
           </Field>
-          <Field label="Members" hint="Select the researchers who need this project in their workspace.">
+          <Field label="구성원" hint="이 프로젝트를 워크스페이스에서 확인해야 하는 연구원을 선택하세요.">
             <div className="grid gap-2 rounded-2xl border border-slate-200 p-3">
               {users.map((user) => (
                 <label className="flex items-center gap-2 text-sm text-slate-700" key={user.id}>

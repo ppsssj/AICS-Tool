@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { TimetableBlockType, Weekday } from '@/entities/models';
 import { weekdays } from '@/shared/lib/date';
+import { timetableBlockTypeLabels, weekdayLabels } from '@/shared/lib/labels';
 import { Button } from '@/shared/ui/button';
 import { Field, Input, Select } from '@/shared/ui/field';
 import { Modal } from '@/shared/ui/modal';
@@ -31,40 +32,40 @@ export function TimetableBlockModal({ open, userId, onClose, onSubmit }: Timetab
     <Modal
       open={open}
       onClose={onClose}
-      title="Register timetable block"
-      description="Capture class commitments, unavailable time, or available lab windows."
+      title="시간표 블록 등록"
+      description="수업, 불가 시간, 연구실 가능 시간을 등록합니다."
       footer={
         <div className="flex justify-end gap-3">
-          <Button variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button variant="secondary" onClick={onClose}>취소</Button>
           <Button onClick={() => { onSubmit({ userId, day, startTime, endTime, category, title }); onClose(); }}>
-            Save block
+            블록 저장
           </Button>
         </div>
       }
     >
       <div className="grid gap-4">
-        <Field label="Title">
+        <Field label="제목">
           <Input value={title} onChange={(event) => setTitle(event.target.value)} />
         </Field>
         <div className="grid gap-4 md:grid-cols-2">
-          <Field label="Category">
+          <Field label="분류">
             <Select value={category} onChange={(event) => setCategory(event.target.value as TimetableBlockType)}>
-              <option value="Class">Class</option>
-              <option value="Unavailable">Unavailable</option>
-              <option value="Lab Availability">Lab Availability</option>
+              <option value="Class">{timetableBlockTypeLabels.Class}</option>
+              <option value="Unavailable">{timetableBlockTypeLabels.Unavailable}</option>
+              <option value="Lab Availability">{timetableBlockTypeLabels['Lab Availability']}</option>
             </Select>
           </Field>
-          <Field label="Day">
+          <Field label="요일">
             <Select value={day} onChange={(event) => setDay(event.target.value as Weekday)}>
-              {weekdays.map((item) => <option key={item} value={item}>{item}</option>)}
+              {weekdays.map((item) => <option key={item} value={item}>{weekdayLabels[item]}</option>)}
             </Select>
           </Field>
         </div>
         <div className="grid gap-4 md:grid-cols-2">
-          <Field label="Start time">
+          <Field label="시작 시간">
             <Input value={startTime} onChange={(event) => setStartTime(event.target.value)} type="time" />
           </Field>
-          <Field label="End time">
+          <Field label="종료 시간">
             <Input value={endTime} onChange={(event) => setEndTime(event.target.value)} type="time" />
           </Field>
         </div>

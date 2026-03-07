@@ -1,12 +1,13 @@
 import { Link, NavLink, Outlet } from 'react-router-dom';
 import { useLabStore } from '@/app/store/use-lab-store';
+import { roleLabels } from '@/shared/lib/labels';
 import { Button } from '@/shared/ui/button';
 
 const navItems = [
-  { to: '/dashboard', label: 'Dashboard' },
-  { to: '/projects', label: 'Projects' },
-  { to: '/calendar', label: 'Calendar' },
-  { to: '/settings', label: 'Settings' },
+  { to: '/dashboard', label: '대시보드' },
+  { to: '/projects', label: '프로젝트' },
+  { to: '/calendar', label: '캘린더' },
+  { to: '/settings', label: '설정' },
 ];
 
 export function AppLayout() {
@@ -16,55 +17,56 @@ export function AppLayout() {
   return (
     <div className="min-h-screen bg-shell text-slate-950">
       <div className="mx-auto grid min-h-screen max-w-[1640px] grid-cols-1 gap-0 px-3 py-3 lg:grid-cols-[292px_1fr]">
-        <aside className="relative flex min-h-[calc(100vh-24px)] flex-col overflow-hidden rounded-[30px] border border-slate-800/40 bg-[linear-gradient(180deg,#111826_0%,#182232_48%,#1a2332_100%)] px-6 py-7 text-slate-200 shadow-float">
-          <div className="absolute inset-x-0 top-0 h-32 bg-[radial-gradient(circle_at_top,_rgba(75,116,217,0.22),_transparent_55%)]" />
+        <aside className="relative flex min-h-[calc(100vh-24px)] flex-col overflow-hidden rounded-[30px] border border-slate-200/75 bg-[linear-gradient(180deg,rgba(242,245,248,0.98),rgba(236,240,244,0.96))] px-6 py-7 text-slate-900 shadow-[0_18px_36px_rgba(148,163,184,0.12)]">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.9),_transparent_36%),linear-gradient(180deg,rgba(255,255,255,0.45),transparent_18%)]" />
+          <div className="absolute inset-y-0 right-0 w-px bg-white/70" />
 
           {currentUser ? (
-            <div className="relative rounded-[24px] border border-white/10 bg-white/[0.06] p-5 backdrop-blur-sm">
+            <div className="relative rounded-[25px] border border-white/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.92),rgba(251,252,254,0.86))] p-5 shadow-[0_12px_28px_rgba(148,163,184,0.14),inset_0_1px_0_rgba(255,255,255,0.8)] backdrop-blur-md">
               <div className="flex items-start gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/10 text-sm font-semibold text-white">
+                <div className="flex h-11 w-11 items-center justify-center rounded-[18px] border border-slate-200/80 bg-white/85 text-sm font-semibold text-slate-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.85)]">
                   {currentUser.name.split(' ').map((part) => part[0]).slice(0, 2).join('')}
                 </div>
                 <div className="min-w-0">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">Lab OS</p>
-                  <h1 className="mt-1 text-lg font-semibold tracking-[-0.02em] text-white">Research Workflow</h1>
+                  <h1 className="mt-1 text-lg font-semibold tracking-[-0.02em] text-slate-800">연구 워크플로 허브</h1>
                 </div>
               </div>
 
-              <div className="mt-5 border-t border-white/10 pt-4">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Signed in as</p>
-                <h2 className="mt-3 truncate text-[16px] font-semibold tracking-[-0.02em] text-white">
+              <div className="mt-5 border-t border-slate-200/70 pt-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">현재 사용자</p>
+                <h2 className="mt-3 truncate text-[16px] font-semibold tracking-[-0.02em] text-slate-900">
                   {currentUser.name}
                 </h2>
-                <p className="mt-1 text-sm text-slate-400">{currentUser.title}</p>
-                <p className="mt-3 text-xs uppercase tracking-[0.16em] text-slate-500">
-                  {currentUser.role} / AICS Lab
+                <p className="mt-1 text-sm text-slate-600">{currentUser.title}</p>
+                <p className="mt-3 text-xs uppercase tracking-[0.16em] text-slate-400">
+                  {roleLabels[currentUser.role]} / AICS Lab
                 </p>
-                <p className="mt-2 truncate text-sm text-slate-400">{currentUser.email}</p>
+                <p className="mt-2 truncate text-sm text-slate-500">{currentUser.email}</p>
               </div>
 
               <div className="mt-5">
                 <Link
-                  className="inline-flex items-center rounded-[14px] border border-white/10 bg-white/[0.08] px-3 py-2 text-xs font-medium tracking-[-0.01em] text-white transition hover:bg-white/[0.12]"
+                  className="inline-flex items-center rounded-[14px] border border-slate-200/80 bg-white/85 px-3 py-2 text-xs font-medium tracking-[-0.01em] text-slate-700 transition hover:border-slate-300/90 hover:bg-white"
                   to="/settings"
                 >
-                  Open settings
+                  설정 열기
                 </Link>
               </div>
             </div>
           ) : null}
 
-          <nav className="relative mt-8 grid gap-2">
+          <nav className="relative mt-8 grid gap-2.5">
             {navItems.map((item) => (
               <NavLink
                 key={item.to}
                 to={item.to}
                 className={({ isActive }) =>
                   [
-                    'group flex items-center rounded-[18px] px-4 py-3 text-sm font-medium tracking-[-0.01em] transition-all duration-200',
+                    'group flex items-center rounded-[18px] border px-4 py-3 text-sm font-medium tracking-[-0.01em] transition-all duration-200',
                     isActive
-                      ? 'border border-white/10 bg-white/[0.12] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]'
-                      : 'text-slate-300 hover:bg-white/[0.07] hover:text-white',
+                      ? 'border-white/85 bg-white/88 text-slate-900 shadow-[0_10px_18px_rgba(148,163,184,0.10),inset_0_1px_0_rgba(255,255,255,0.7)]'
+                      : 'border-transparent text-slate-600 hover:border-white/60 hover:bg-white/58 hover:text-slate-800',
                   ].join(' ')
                 }
               >
@@ -75,15 +77,15 @@ export function AppLayout() {
 
           {currentUser ? (
             <div className="relative mt-auto pt-10">
-              <div className="rounded-[24px] border border-white/10 bg-white/[0.07] p-5 backdrop-blur-sm">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Session</p>
-                <p className="mt-3 text-sm leading-6 text-slate-400">Weekly coordination mode</p>
+              <div className="rounded-[24px] border border-white/75 bg-[linear-gradient(180deg,rgba(255,255,255,0.8),rgba(248,250,252,0.72))] p-5 shadow-[0_12px_24px_rgba(148,163,184,0.12),inset_0_1px_0_rgba(255,255,255,0.75)] backdrop-blur-md">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">세션</p>
+                <p className="mt-3 text-sm leading-6 text-slate-600">주간 작업 모드</p>
                 <Button
                   variant="ghost"
-                  className="mt-5 w-full justify-between border border-white/10 bg-white/[0.08] px-4 text-white hover:bg-white/[0.12]"
+                  className="mt-5 w-full justify-between border border-slate-200/85 bg-white/85 px-4 text-slate-700 hover:border-slate-300/90 hover:bg-white"
                   onClick={logout}
                 >
-                  Log out
+                  로그아웃
                   <span className="text-slate-400">{'>'}</span>
                 </Button>
               </div>
@@ -95,7 +97,7 @@ export function AppLayout() {
           <header className="border-b border-slate-200/80 bg-white/70 px-8 py-5 backdrop-blur">
             <div className="flex justify-end">
               <div className="rounded-full border border-slate-200/90 bg-white/90 px-4 py-2 text-sm text-slate-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]">
-                Weekly coordination mode
+                주간 작업 모드
               </div>
             </div>
           </header>

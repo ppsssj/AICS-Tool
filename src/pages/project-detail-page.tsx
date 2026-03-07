@@ -6,6 +6,14 @@ import { ScheduleFormModal } from '@/features/calendar/schedule-form-modal';
 import { DocumentFormModal } from '@/features/documents/document-form-modal';
 import { TaskFormModal } from '@/features/tasks/task-form-modal';
 import { compareWeekday, formatDateTime } from '@/shared/lib/date';
+import {
+  projectStatusLabels,
+  roleLabels,
+  scheduleTypeLabels,
+  taskPriorityLabels,
+  taskStatusLabels,
+  weekdayLabels,
+} from '@/shared/lib/labels';
 import { Badge } from '@/shared/ui/badge';
 import { Button } from '@/shared/ui/button';
 import { Card } from '@/shared/ui/card';
@@ -13,7 +21,13 @@ import { EmptyState } from '@/shared/ui/empty-state';
 import { PageHeader } from '@/shared/ui/page-header';
 
 type ProjectTab = 'Overview' | 'Docs' | 'Tasks' | 'Schedule' | 'Members';
-const tabs: ProjectTab[] = ['Overview', 'Docs', 'Tasks', 'Schedule', 'Members'];
+const tabs: Array<{ key: ProjectTab; label: string }> = [
+  { key: 'Overview', label: '개요' },
+  { key: 'Docs', label: '문서' },
+  { key: 'Tasks', label: '작업' },
+  { key: 'Schedule', label: '일정' },
+  { key: 'Members', label: '멤버' },
+];
 
 function statusTone(status: ProjectStatus): 'success' | 'warning' | 'neutral' {
   if (status === 'Active') return 'success';
@@ -39,7 +53,7 @@ export function ProjectDetailPage() {
   const members = users.filter((user) => project?.memberIds.includes(user.id));
 
   if (!project) {
-    return <EmptyState title="Project not found" description="The requested project does not exist in the mock workspace." />;
+    return <EmptyState title="프로젝트를 찾을 수 없습니다" description="요청한 프로젝트가 현재 워크스페이스에 존재하지 않습니다." />;
   }
 
   return (
@@ -49,17 +63,17 @@ export function ProjectDetailPage() {
         description={project.description}
         actions={
           <>
-            <Button variant="secondary" onClick={() => setShowDocumentModal(true)}>Create document</Button>
-            <Button variant="secondary" onClick={() => setShowTaskModal(true)}>Create task</Button>
-            <Button onClick={() => setShowScheduleModal(true)}>Create schedule</Button>
+            <Button variant="secondary" onClick={() => setShowDocumentModal(true)}>문서 생성</Button>
+            <Button variant="secondary" onClick={() => setShowTaskModal(true)}>작업 생성</Button>
+            <Button onClick={() => setShowScheduleModal(true)}>일정 생성</Button>
           </>
         }
       />
 
       <div className="flex flex-wrap gap-2">
         {tabs.map((tab) => (
-          <Button key={tab} variant={activeTab === tab ? 'primary' : 'secondary'} onClick={() => setActiveTab(tab)}>
-            {tab}
+          <Button key={tab.key} variant={activeTab === tab.key ? 'primary' : 'secondary'} onClick={() => setActiveTab(tab.key)}>
+            {tab.label}
           </Button>
         ))}
       </div>
@@ -67,24 +81,24 @@ export function ProjectDetailPage() {
       {activeTab === 'Overview' ? (
         <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
           <div className="grid gap-4 md:grid-cols-3">
-            <Card className="border-slate-200/70"><p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Documents</p><p className="mt-3 text-[34px] font-semibold tracking-[-0.05em] text-slate-950">{projectDocuments.length}</p></Card>
-            <Card className="border-slate-200/70"><p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Tasks</p><p className="mt-3 text-[34px] font-semibold tracking-[-0.05em] text-slate-950">{projectTasks.length}</p></Card>
-            <Card className="border-slate-200/70"><p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Members</p><p className="mt-3 text-[34px] font-semibold tracking-[-0.05em] text-slate-950">{members.length}</p></Card>
+            <Card className="border-slate-200/70"><p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">문서</p><p className="mt-3 text-[34px] font-semibold tracking-[-0.05em] text-slate-950">{projectDocuments.length}</p></Card>
+            <Card className="border-slate-200/70"><p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">작업</p><p className="mt-3 text-[34px] font-semibold tracking-[-0.05em] text-slate-950">{projectTasks.length}</p></Card>
+            <Card className="border-slate-200/70"><p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">멤버</p><p className="mt-3 text-[34px] font-semibold tracking-[-0.05em] text-slate-950">{members.length}</p></Card>
           </div>
           <Card className="border-slate-200/70">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Project hub</p>
-                <h2 className="mt-2 text-[24px] font-semibold tracking-[-0.03em] text-slate-950">Operational summary</h2>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">프로젝트 허브</p>
+                <h2 className="mt-2 text-[24px] font-semibold tracking-[-0.03em] text-slate-950">운영 요약</h2>
               </div>
-              <Badge tone={statusTone(project.status)}>{project.status}</Badge>
+              <Badge tone={statusTone(project.status)}>{projectStatusLabels[project.status]}</Badge>
             </div>
             <p className="mt-4 text-[15px] leading-7 text-slate-500">
-              This page is the main working surface for the project. Documents, task execution, schedules, and team context stay close enough to act on without feeling crowded.
+              이 페이지는 프로젝트의 주요 작업 화면입니다. 문서, 작업 실행, 일정, 팀 정보를 한곳에서 바로 다룰 수 있습니다.
             </p>
             <div className="mt-5 rounded-[22px] border border-slate-200/80 bg-slate-50/75 p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Latest activity</p>
-              <p className="mt-2 text-sm text-slate-500">Project metadata updated {formatDateTime(project.updatedAt)}</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">최근 활동</p>
+              <p className="mt-2 text-sm text-slate-500">프로젝트 메타데이터 수정 {formatDateTime(project.updatedAt)}</p>
             </div>
           </Card>
         </div>
@@ -94,10 +108,10 @@ export function ProjectDetailPage() {
         <Card className="border-slate-200/70">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Knowledge</p>
-              <h2 className="mt-2 text-[24px] font-semibold tracking-[-0.03em] text-slate-950">Project documents</h2>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">문서 자산</p>
+              <h2 className="mt-2 text-[24px] font-semibold tracking-[-0.03em] text-slate-950">프로젝트 문서</h2>
             </div>
-            <Button onClick={() => setShowDocumentModal(true)}>Create document</Button>
+            <Button onClick={() => setShowDocumentModal(true)}>문서 생성</Button>
           </div>
           <div className="mt-5 grid gap-4">
             {projectDocuments.map((document) => (
@@ -107,7 +121,7 @@ export function ProjectDetailPage() {
                 to={`/projects/${project.id}/docs/${document.id}`}
               >
                 <p className="text-[16px] font-semibold tracking-[-0.02em] text-slate-900">{document.title}</p>
-                <p className="mt-2 text-sm text-slate-500">{document.tags.join(' · ')}</p>
+                <p className="mt-2 text-sm text-slate-500">{document.tags.join(' / ')}</p>
               </Link>
             ))}
           </div>
@@ -118,10 +132,10 @@ export function ProjectDetailPage() {
         <Card className="border-slate-200/70">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Execution</p>
-              <h2 className="mt-2 text-[24px] font-semibold tracking-[-0.03em] text-slate-950">Task summary</h2>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">실행</p>
+              <h2 className="mt-2 text-[24px] font-semibold tracking-[-0.03em] text-slate-950">작업 요약</h2>
             </div>
-            <Link className="text-sm font-semibold text-accent-700" to={`/projects/${project.id}/tasks`}>Open board</Link>
+            <Link className="text-sm font-semibold text-accent-700" to={`/projects/${project.id}/tasks`}>보드 열기</Link>
           </div>
           <div className="mt-5 grid gap-4 md:grid-cols-2">
             {projectTasks.map((task) => {
@@ -129,11 +143,11 @@ export function ProjectDetailPage() {
               return (
                 <div key={task.id} className="rounded-[22px] border border-slate-200/80 bg-slate-50/70 p-4">
                   <div className="flex items-center gap-2">
-                    <Badge tone="info">{task.status}</Badge>
-                    <Badge tone={task.priority === 'Urgent' ? 'danger' : task.priority === 'High' ? 'warning' : 'neutral'}>{task.priority}</Badge>
+                    <Badge tone="info">{taskStatusLabels[task.status]}</Badge>
+                    <Badge tone={task.priority === 'Urgent' ? 'danger' : task.priority === 'High' ? 'warning' : 'neutral'}>{taskPriorityLabels[task.priority]}</Badge>
                   </div>
                   <p className="mt-3 text-[16px] font-semibold tracking-[-0.02em] text-slate-900">{task.title}</p>
-                  <p className="mt-1 text-sm text-slate-500">{assignee?.name ?? 'Unassigned'}</p>
+                  <p className="mt-1 text-sm text-slate-500">{assignee?.name ?? '미배정'}</p>
                 </div>
               );
             })}
@@ -145,20 +159,20 @@ export function ProjectDetailPage() {
         <Card className="border-slate-200/70">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Coordination</p>
-              <h2 className="mt-2 text-[24px] font-semibold tracking-[-0.03em] text-slate-950">Project schedule</h2>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">조정</p>
+              <h2 className="mt-2 text-[24px] font-semibold tracking-[-0.03em] text-slate-950">프로젝트 일정</h2>
             </div>
-            <Button onClick={() => setShowScheduleModal(true)}>Create schedule</Button>
+            <Button onClick={() => setShowScheduleModal(true)}>일정 생성</Button>
           </div>
           <div className="mt-5 space-y-3">
             {projectSchedules.map((schedule) => (
               <div key={schedule.id} className="rounded-[22px] border border-slate-200/80 bg-slate-50/70 p-4">
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-[15px] font-semibold tracking-[-0.02em] text-slate-900">{schedule.title}</p>
-                  <Badge tone="info">{schedule.type}</Badge>
+                  <Badge tone="info">{scheduleTypeLabels[schedule.type]}</Badge>
                 </div>
                 <p className="mt-2 text-sm text-slate-500">
-                  {schedule.day} · {schedule.startTime} - {schedule.endTime}
+                  {weekdayLabels[schedule.day]} / {schedule.startTime} - {schedule.endTime}
                 </p>
                 <p className="mt-1 text-sm text-slate-500">{schedule.location}</p>
               </div>
@@ -170,15 +184,15 @@ export function ProjectDetailPage() {
       {activeTab === 'Members' ? (
         <Card className="border-slate-200/70">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Team</p>
-            <h2 className="mt-2 text-[24px] font-semibold tracking-[-0.03em] text-slate-950">Members</h2>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">팀</p>
+            <h2 className="mt-2 text-[24px] font-semibold tracking-[-0.03em] text-slate-950">멤버</h2>
           </div>
           <div className="mt-5 grid gap-3 md:grid-cols-2">
             {members.map((member) => (
               <div key={member.id} className="rounded-[22px] border border-slate-200/80 bg-slate-50/70 p-4">
                 <p className="text-[16px] font-semibold tracking-[-0.02em] text-slate-900">{member.name}</p>
                 <p className="mt-1 text-sm text-slate-500">{member.title}</p>
-                <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">{member.role}</p>
+                <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">{roleLabels[member.role]}</p>
               </div>
             ))}
           </div>

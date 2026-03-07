@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { Project, ScheduleType, Weekday } from '@/entities/models';
 import { weekdays } from '@/shared/lib/date';
+import { scheduleTypeLabels, weekdayLabels } from '@/shared/lib/labels';
 import { Button } from '@/shared/ui/button';
 import { Field, Input, Select, Textarea } from '@/shared/ui/field';
 import { Modal } from '@/shared/ui/modal';
@@ -39,60 +40,60 @@ export function ScheduleFormModal({ open, projects, ownerId, initialType = 'Lab'
     <Modal
       open={open}
       onClose={onClose}
-      title="Create schedule"
-      description="Capture recurring project and lab commitments in a weekly format that works for student-heavy teams."
+      title="일정 생성"
+      description="학생 연구진 중심 팀에 맞는 주간 형식으로 프로젝트 및 연구실 반복 일정을 등록합니다."
       footer={
         <div className="flex justify-end gap-3">
-          <Button variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button variant="secondary" onClick={onClose}>취소</Button>
           <Button
             onClick={() => {
               onSubmit({ title, type, projectId: type === 'Project' ? projectId : undefined, ownerId: type === 'Personal' ? ownerId : undefined, day, startTime, endTime, location, note });
               onClose();
             }}
           >
-            Save schedule
+            일정 저장
           </Button>
         </div>
       }
     >
       <div className="grid gap-4">
-        <Field label="Title">
+        <Field label="제목">
           <Input value={title} onChange={(event) => setTitle(event.target.value)} />
         </Field>
         <div className="grid gap-4 md:grid-cols-2">
-          <Field label="Type">
+          <Field label="유형">
             <Select value={type} onChange={(event) => setType(event.target.value as ScheduleType)}>
-              <option value="Personal">Personal</option>
-              <option value="Lab">Lab</option>
-              <option value="Project">Project</option>
+              <option value="Personal">{scheduleTypeLabels.Personal}</option>
+              <option value="Lab">{scheduleTypeLabels.Lab}</option>
+              <option value="Project">{scheduleTypeLabels.Project}</option>
             </Select>
           </Field>
           {type === 'Project' ? (
-            <Field label="Project">
+            <Field label="프로젝트">
               <Select value={projectId} onChange={(event) => setProjectId(event.target.value)}>
-                <option value="">Select a project</option>
+                <option value="">프로젝트 선택</option>
                 {projects.map((project) => <option key={project.id} value={project.id}>{project.title}</option>)}
               </Select>
             </Field>
           ) : null}
         </div>
         <div className="grid gap-4 md:grid-cols-3">
-          <Field label="Day">
+          <Field label="요일">
             <Select value={day} onChange={(event) => setDay(event.target.value as Weekday)}>
-              {weekdays.map((item) => <option key={item} value={item}>{item}</option>)}
+              {weekdays.map((item) => <option key={item} value={item}>{weekdayLabels[item]}</option>)}
             </Select>
           </Field>
-          <Field label="Start time">
+          <Field label="시작 시간">
             <Input value={startTime} onChange={(event) => setStartTime(event.target.value)} type="time" />
           </Field>
-          <Field label="End time">
+          <Field label="종료 시간">
             <Input value={endTime} onChange={(event) => setEndTime(event.target.value)} type="time" />
           </Field>
         </div>
-        <Field label="Location">
+        <Field label="장소">
           <Input value={location} onChange={(event) => setLocation(event.target.value)} />
         </Field>
-        <Field label="Notes">
+        <Field label="메모">
           <Textarea value={note} onChange={(event) => setNote(event.target.value)} />
         </Field>
       </div>

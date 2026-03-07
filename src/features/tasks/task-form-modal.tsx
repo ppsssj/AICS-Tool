@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { Document, Task, TaskPriority, TaskStatus, User } from '@/entities/models';
+import { taskPriorityLabels, taskStatusLabels } from '@/shared/lib/labels';
 import { Button } from '@/shared/ui/button';
 import { Field, Input, Select, Textarea } from '@/shared/ui/field';
 import { Modal } from '@/shared/ui/modal';
@@ -51,52 +52,52 @@ export function TaskFormModal({ open, projectId, users, documents, initialValue,
     <Modal
       open={open}
       onClose={onClose}
-      title={initialValue ? 'Edit task' : 'Create task'}
-      description="Keep task cards operational: assignee, due date, and linked document are the main workflow anchors."
+      title={initialValue ? '작업 수정' : '작업 생성'}
+      description="담당자, 마감일, 연결 문서를 중심으로 실무에 바로 쓸 수 있는 작업 카드를 유지합니다."
       footer={
         <div className="flex justify-end gap-3">
-          <Button variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button variant="secondary" onClick={onClose}>취소</Button>
           <Button
             onClick={() => {
               onSubmit({ projectId, title, description, status, priority, assigneeId, dueDate, documentId: documentId || undefined });
               onClose();
             }}
           >
-            {initialValue ? 'Save task' : 'Create task'}
+            {initialValue ? '작업 저장' : '작업 생성'}
           </Button>
         </div>
       }
     >
       <div className="grid gap-4">
-        <Field label="Task title">
+        <Field label="작업 제목">
           <Input value={title} onChange={(event) => setTitle(event.target.value)} />
         </Field>
-        <Field label="Description">
+        <Field label="설명">
           <Textarea value={description} onChange={(event) => setDescription(event.target.value)} />
         </Field>
         <div className="grid gap-4 md:grid-cols-2">
-          <Field label="Status">
+          <Field label="상태">
             <Select value={status} onChange={(event) => setStatus(event.target.value as TaskStatus)}>
-              {statuses.map((item) => <option key={item} value={item}>{item}</option>)}
+              {statuses.map((item) => <option key={item} value={item}>{taskStatusLabels[item]}</option>)}
             </Select>
           </Field>
-          <Field label="Priority">
+          <Field label="우선순위">
             <Select value={priority} onChange={(event) => setPriority(event.target.value as TaskPriority)}>
-              {priorities.map((item) => <option key={item} value={item}>{item}</option>)}
+              {priorities.map((item) => <option key={item} value={item}>{taskPriorityLabels[item]}</option>)}
             </Select>
           </Field>
-          <Field label="Assignee">
+          <Field label="담당자">
             <Select value={assigneeId} onChange={(event) => setAssigneeId(event.target.value)}>
               {users.map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}
             </Select>
           </Field>
-          <Field label="Due date">
+          <Field label="마감일">
             <Input value={dueDate} onChange={(event) => setDueDate(event.target.value)} type="date" />
           </Field>
         </div>
-        <Field label="Linked document">
+        <Field label="연결 문서">
           <Select value={documentId} onChange={(event) => setDocumentId(event.target.value)}>
-            <option value="">No linked document</option>
+            <option value="">연결 문서 없음</option>
             {documents.map((document) => <option key={document.id} value={document.id}>{document.title}</option>)}
           </Select>
         </Field>

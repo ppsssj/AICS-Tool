@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useLabStore } from '@/app/store/use-lab-store';
 import type { Schedule, Task, TimetableBlock, Weekday } from '@/entities/models';
+import { projectStatusLabels, taskPriorityLabels, taskStatusLabels, weekdayLabels } from '@/shared/lib/labels';
 import type { BadgeTone } from '@/shared/ui/badge';
 import { compareWeekday, formatDate, formatShortDate } from '@/shared/lib/date';
 import { Badge } from '@/shared/ui/badge';
@@ -73,8 +74,8 @@ function buildScheduleDiagnostic(schedule: Schedule, blocks: TimetableBlock[]): 
     return {
       schedule,
       tone: 'danger',
-      label: 'Outside availability',
-      detail: hardConflictBlock.category === 'Class' ? 'Class overlap' : 'Marked unavailable',
+      label: '가용 시간 외',
+      detail: hardConflictBlock.category === 'Class' ? '수업 일정과 겹침' : '참여 불가로 표시된 시간',
       isConflict: true,
     };
   }
@@ -85,8 +86,8 @@ function buildScheduleDiagnostic(schedule: Schedule, blocks: TimetableBlock[]): 
       return {
         schedule,
         tone: 'success',
-        label: 'Fits lab block',
-        detail: 'Within registered availability',
+        label: '가용 시간 내',
+        detail: '등록된 실험실 가능 시간 안에 있음',
         isConflict: false,
       };
     }
@@ -95,8 +96,8 @@ function buildScheduleDiagnostic(schedule: Schedule, blocks: TimetableBlock[]): 
     return {
       schedule,
       tone: 'warning',
-      label: partialAvailability ? 'Partial fit' : 'Outside availability',
-      detail: partialAvailability ? 'Extends beyond open lab window' : 'No matching lab block',
+      label: partialAvailability ? '부분 겹침' : '가용 시간 외',
+      detail: partialAvailability ? '가능 시간 범위를 일부 넘김' : '연결되는 가능 시간 블록 없음',
       isConflict: true,
     };
   }
@@ -104,8 +105,8 @@ function buildScheduleDiagnostic(schedule: Schedule, blocks: TimetableBlock[]): 
   return {
     schedule,
     tone: 'neutral',
-    label: 'No lab block',
-    detail: 'Availability not registered',
+    label: '가용 시간 미등록',
+    detail: '개인 가능 시간이 아직 등록되지 않음',
     isConflict: false,
   };
 }
@@ -124,11 +125,11 @@ function getReferenceDate(tasks: Task[]): Date {
 }
 
 function getWeekdayLabel(day: Weekday, start: string, end: string): string {
-  return `${day} - ${start} to ${end}`;
+  return `${weekdayLabels[day]} ${start} - ${end}`;
 }
 
 function compactCountText(count: number, singular: string, plural: string): string {
-  return `${count} ${count === 1 ? singular : plural}`;
+  return `${count}${count === 1 ? singular : plural}`;
 }
 
 function taskPriorityTone(task: Task): BadgeTone {
@@ -236,9 +237,9 @@ export function DashboardPage() {
     ...overdueTasks.map((task) => ({
       id: `overdue-${task.id}`,
       title: task.title,
-      label: 'Due soon',
+      label: '기한 초과',
       tone: 'danger' as BadgeTone,
-      detail: `Past due since ${formatDate(task.dueDate)}`,
+      detail: `${formatDate(task.dueDate)}부터 지연`,
       projectId: task.projectId,
     })),
     ...dueSoonTasks
@@ -246,9 +247,9 @@ export function DashboardPage() {
       .map((task) => ({
         id: `soon-${task.id}`,
         title: task.title,
-        label: 'Due soon',
+        label: '마감 임박',
         tone: 'warning' as BadgeTone,
-        detail: `Needs movement before ${formatDate(task.dueDate)}`,
+        detail: `${formatDate(task.dueDate)} 전까지 진행 필요`,
         projectId: task.projectId,
       })),
     ...unresolvedItems
@@ -256,9 +257,9 @@ export function DashboardPage() {
       .map((task) => ({
         id: `handoff-${task.id}`,
         title: task.title,
-        label: task.status === 'Review' ? 'Waiting review' : 'Blocked by handoff',
+        label: task.status === 'Review' ? '검토 대기' : '인수인계 지연',
         tone: 'warning' as BadgeTone,
-        detail: task.status === 'Review' ? 'Queued for sign-off' : 'Review dependency still unresolved',
+        detail: task.status === 'Review' ? '승인 대기 중' : '검토 의존성이 아직 해결되지 않음',
         projectId: task.projectId,
       })),
     ...scheduleConflicts.map((item) => ({
@@ -272,9 +273,9 @@ export function DashboardPage() {
     ...unassignedTasks.map((task) => ({
       id: `unassigned-${task.id}`,
       title: task.title,
-      label: 'No assignee',
+      label: '담당자 없음',
       tone: 'warning' as BadgeTone,
-      detail: 'Task is still missing ownership',
+      detail: '작업 소유자가 아직 지정되지 않음',
       projectId: task.projectId,
     })),
   ].slice(0, 5);
@@ -296,13 +297,13 @@ export function DashboardPage() {
         score,
         reasons: [
           projectDueThisWeek.length > 0
-            ? compactCountText(projectDueThisWeek.length, 'due task this week', 'due tasks this week')
+            ? compactCountText(projectDueThisWeek.length, '건 이번 주 마감', '건 이번 주 마감')
             : null,
           projectReview.length > 0
-            ? compactCountText(projectReview.length, 'pending review', 'pending review')
+            ? compactCountText(projectReview.length, '건 검토 대기', '건 검토 대기')
             : null,
           projectScheduleIssues.length > 0
-            ? compactCountText(projectScheduleIssues.length, 'schedule issue unresolved', 'schedule issues unresolved')
+            ? compactCountText(projectScheduleIssues.length, '건 일정 이슈 미해결', '건 일정 이슈 미해결')
             : null,
         ].filter(Boolean),
       };
@@ -313,35 +314,35 @@ export function DashboardPage() {
 
   const weeklySummary = `${compactCountText(
     dueSoonTasks.length,
-    'item due in the next 72 hours',
-    'items due in the next 72 hours',
+    '건의 작업이 72시간 내 마감',
+    '건의 작업이 72시간 내 마감',
   )}, ${compactCountText(
     scheduleConflicts.length,
-    'schedule mismatch',
-    'schedule mismatches',
-  )}, and ${compactCountText(
+    '건의 일정 불일치',
+    '건의 일정 불일치',
+  )}, ${compactCountText(
     unresolvedItems.length,
-    'waiting handoff',
-    'waiting handoffs',
-  )} need attention.`;
+    '건의 인수인계 대기',
+    '건의 인수인계 대기',
+  )}가 확인이 필요합니다.`;
 
   const followupSummary = bestCollaborationWindow
-    ? `Best shared lab window: ${getWeekdayLabel(
+    ? `가장 넓은 공용 연구실 시간은 ${getWeekdayLabel(
         bestCollaborationWindow.day,
         bestCollaborationWindow.startTime,
         bestCollaborationWindow.endTime,
-      )}.`
-    : 'No lab-availability block is registered yet.';
+      )}입니다.`
+    : '등록된 연구실 가능 시간 블록이 아직 없습니다.';
 
   return (
     <div className="space-y-8">
-      <PageHeader title={`Welcome back, ${currentUser?.name.split(' ')[0] ?? 'Researcher'}`} />
+      <PageHeader title={`${currentUser?.name.split(' ')[0] ?? '연구원'}님, 다시 오셨네요`} />
 
       <Card className="overflow-hidden border-slate-200/70 bg-[linear-gradient(135deg,rgba(255,255,255,0.97),rgba(245,247,252,0.94))] py-5">
         <div className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-              Weekly Operational Brief
+              주간 운영 브리프
             </p>
             <h2 className="mt-2 text-[26px] font-semibold tracking-[-0.04em] text-slate-950">
               {weeklySummary}
@@ -352,7 +353,7 @@ export function DashboardPage() {
           <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
             <div className="rounded-[20px] border border-white/80 bg-white/92 px-4 py-3.5">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-                Due soon
+                마감 임박
               </p>
               <p className="mt-1.5 text-[28px] font-semibold tracking-[-0.04em] text-slate-950">
                 {dueSoonTasks.length}
@@ -360,7 +361,7 @@ export function DashboardPage() {
             </div>
             <div className="rounded-[20px] border border-white/80 bg-white/92 px-4 py-3.5">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-                Schedule conflicts
+                일정 충돌
               </p>
               <p className="mt-1.5 text-[28px] font-semibold tracking-[-0.04em] text-slate-950">
                 {scheduleConflicts.length}
@@ -368,7 +369,7 @@ export function DashboardPage() {
             </div>
             <div className="rounded-[20px] border border-white/80 bg-white/92 px-4 py-3.5">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-                Waiting items
+                대기 항목
               </p>
               <p className="mt-1.5 text-[28px] font-semibold tracking-[-0.04em] text-slate-950">
                 {unresolvedItems.length}
@@ -381,49 +382,49 @@ export function DashboardPage() {
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <Card className="border-slate-200/70 p-5">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-            Assigned to me
+            내 담당 작업
           </p>
           <p className="mt-2 text-[32px] font-semibold tracking-[-0.05em] text-slate-950">
             {myTasks.length}
           </p>
           <p className="mt-1.5 text-sm text-slate-500">
-            {compactCountText(myTasks.length, 'open task in your queue', 'open tasks in your queue')}
+            {compactCountText(myTasks.length, '건의 열린 작업이 내 큐에 있습니다', '건의 열린 작업이 내 큐에 있습니다')}
           </p>
         </Card>
 
         <Card className="border-slate-200/70 p-5">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-            Due this week
+            이번 주 마감
           </p>
           <p className="mt-2 text-[32px] font-semibold tracking-[-0.05em] text-slate-950">
             {dueThisWeekTasks.length}
           </p>
           <p className="mt-1.5 text-sm text-slate-500">
-            {compactCountText(dueThisWeekTasks.length, 'item due this week', 'items due this week')}
+            {compactCountText(dueThisWeekTasks.length, '건이 이번 주 마감입니다', '건이 이번 주 마감입니다')}
           </p>
         </Card>
 
         <Card className="border-amber-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(255,249,240,0.92))] p-5">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-500">
-            Schedule conflicts
+            일정 충돌
           </p>
           <p className="mt-2 text-[32px] font-semibold tracking-[-0.05em] text-slate-950">
             {scheduleConflicts.length}
           </p>
           <p className="mt-1.5 text-sm text-slate-500">
-            {compactCountText(scheduleConflicts.length, 'schedule mismatch detected', 'schedule mismatches detected')}
+            {compactCountText(scheduleConflicts.length, '건의 일정 불일치가 감지되었습니다', '건의 일정 불일치가 감지되었습니다')}
           </p>
         </Card>
 
         <Card className="border-slate-200/70 p-5">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-            Pending review
+            검토 대기
           </p>
           <p className="mt-2 text-[32px] font-semibold tracking-[-0.05em] text-slate-950">
             {pendingReviewTasks.length}
           </p>
           <p className="mt-1.5 text-sm text-slate-500">
-            {compactCountText(pendingReviewTasks.length, 'item waiting for handoff', 'items waiting for handoff')}
+            {compactCountText(pendingReviewTasks.length, '건이 인수인계 대기 중입니다', '건이 인수인계 대기 중입니다')}
           </p>
         </Card>
       </div>
@@ -432,10 +433,10 @@ export function DashboardPage() {
         <Card className="border-slate-200/70">
           <div className="flex items-center justify-between">
             <h2 className="text-[24px] font-semibold tracking-[-0.03em] text-slate-950">
-              My work queue
+              내 작업 큐
             </h2>
             <Link className="text-sm font-semibold text-accent-700" to="/projects">
-              View projects
+              프로젝트 보기
             </Link>
           </div>
 
@@ -455,12 +456,12 @@ export function DashboardPage() {
                   className="rounded-[20px] border border-slate-200/80 bg-slate-50/80 px-4 py-3.5 transition hover:border-slate-300 hover:bg-white"
                 >
                   <div className="flex flex-wrap items-center gap-2">
-                    <Badge tone={taskPriorityTone(task)}>{task.priority}</Badge>
-                    <Badge tone="info">{task.status}</Badge>
-                    {linkedDoc ? <Badge tone="neutral">Linked doc</Badge> : null}
-                    {needsReview ? <Badge tone="warning">Waiting review</Badge> : null}
-                    {needsAdvisorCheck ? <Badge tone="warning">Blocked by handoff</Badge> : null}
-                    {projectScheduleRisk ? <Badge tone="warning">Outside availability</Badge> : null}
+                    <Badge tone={taskPriorityTone(task)}>{taskPriorityLabels[task.priority]}</Badge>
+                    <Badge tone="info">{taskStatusLabels[task.status]}</Badge>
+                    {linkedDoc ? <Badge tone="neutral">연결 문서</Badge> : null}
+                    {needsReview ? <Badge tone="warning">검토 대기</Badge> : null}
+                    {needsAdvisorCheck ? <Badge tone="warning">인수인계 지연</Badge> : null}
+                    {projectScheduleRisk ? <Badge tone="warning">가용 시간 외</Badge> : null}
                   </div>
 
                   <div className="mt-3 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -469,9 +470,9 @@ export function DashboardPage() {
                         {task.title}
                       </h3>
                       <p className="mt-1 text-sm text-slate-500">
-                        {project?.title ?? 'Unknown project'}
+                        {project?.title ?? '알 수 없는 프로젝트'}
                       </p>
-                      <p className="mt-2 text-sm text-slate-500">Due {formatDate(task.dueDate)}</p>
+                      <p className="mt-2 text-sm text-slate-500">마감 {formatDate(task.dueDate)}</p>
                       {linkedDoc ? (
                         <p className="mt-1 text-sm text-slate-500">{linkedDoc.title}</p>
                       ) : null}
@@ -483,7 +484,7 @@ export function DashboardPage() {
                         className="px-3 py-1.5 text-xs text-slate-700"
                         onClick={() => updateTaskStatus(task.id, 'Done')}
                       >
-                        Mark done
+                        완료 처리
                       </Button>
                       {task.status === 'Todo' || task.status === 'In Progress' ? (
                         <Button
@@ -491,14 +492,14 @@ export function DashboardPage() {
                           className="px-3 py-1.5 text-xs text-slate-700"
                           onClick={() => updateTaskStatus(task.id, 'Review')}
                         >
-                          Move to review
+                          검토로 이동
                         </Button>
                       ) : null}
                       <Link
                         className="inline-flex items-center justify-center rounded-[14px] border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
                         to={`/projects/${task.projectId}`}
                       >
-                        Open project
+                        프로젝트 열기
                       </Link>
                     </div>
                   </div>
@@ -511,9 +512,9 @@ export function DashboardPage() {
         <Card className="border-rose-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(255,246,247,0.93))]">
           <div className="flex items-center justify-between">
             <h2 className="text-[24px] font-semibold tracking-[-0.03em] text-slate-950">
-              Operational risks
+              운영 리스크
             </h2>
-            <Badge tone="danger">Watch</Badge>
+            <Badge tone="danger">주의</Badge>
           </div>
 
           <div className="mt-5 space-y-3">
@@ -533,7 +534,7 @@ export function DashboardPage() {
                     className="mt-2 inline-flex text-[11px] font-semibold uppercase tracking-[0.14em] text-accent-700"
                     to={`/projects/${item.projectId}`}
                   >
-                    Open project
+                    프로젝트 열기
                   </Link>
                 ) : null}
               </div>
@@ -547,15 +548,15 @@ export function DashboardPage() {
           <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-                Weekly coordination
+                주간 코디네이션
               </p>
               <h2 className="mt-1.5 text-[24px] font-semibold tracking-[-0.03em] text-slate-950">
-                Shared schedule and availability
+                공유 일정과 개인 가능 시간
               </h2>
             </div>
             {bestCollaborationWindow ? (
               <div className="rounded-[18px] border border-emerald-200/80 bg-emerald-50/70 px-4 py-2.5 text-sm text-slate-700">
-                Best lab window: {getWeekdayLabel(bestCollaborationWindow.day, bestCollaborationWindow.startTime, bestCollaborationWindow.endTime)}
+                최적 연구실 시간: {getWeekdayLabel(bestCollaborationWindow.day, bestCollaborationWindow.startTime, bestCollaborationWindow.endTime)}
               </div>
             ) : null}
           </div>
@@ -582,7 +583,7 @@ export function DashboardPage() {
             {personalSchedules.slice(0, 1).map((schedule) => (
               <div key={schedule.id} className="rounded-[20px] border border-slate-200/80 bg-white/85 px-4 py-3.5">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-                  Personal hold
+                  개인 확보 시간
                 </p>
                 <p className="mt-2 text-[15px] font-semibold tracking-[-0.02em] text-slate-900">
                   {schedule.title}
@@ -598,10 +599,10 @@ export function DashboardPage() {
         <Card className="border-slate-200/70">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-              Project watchlist
+              프로젝트 워치리스트
             </p>
             <h2 className="mt-1.5 text-[24px] font-semibold tracking-[-0.03em] text-slate-950">
-              Projects needing attention this week
+              이번 주 확인이 필요한 프로젝트
             </h2>
           </div>
 
@@ -628,7 +629,7 @@ export function DashboardPage() {
                           : 'neutral'
                     }
                   >
-                    {item.project.status}
+                    {projectStatusLabels[item.project.status]}
                   </Badge>
                 </div>
               </Link>
@@ -640,10 +641,10 @@ export function DashboardPage() {
       <Card className="border-slate-200/70 p-5">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-            Recent documents
+            최근 문서
           </p>
           <h2 className="mt-1.5 text-[18px] font-semibold tracking-[-0.03em] text-slate-950">
-            Lightweight knowledge updates
+            가볍게 확인하는 지식 업데이트
           </h2>
         </div>
 
@@ -659,10 +660,10 @@ export function DashboardPage() {
                 <p className="text-[14px] font-semibold tracking-[-0.02em] text-slate-900">
                   {document.title}
                 </p>
-                <p className="mt-1.5 text-sm text-slate-500">{project?.title ?? 'Unknown project'}</p>
+                <p className="mt-1.5 text-sm text-slate-500">{project?.title ?? '알 수 없는 프로젝트'}</p>
                 <p className="mt-1 text-sm text-slate-500">{document.tags.join(', ')}</p>
                 <p className="mt-2.5 text-[13px] text-slate-500">
-                  Updated {formatShortDate(document.updatedAt)}
+                  업데이트 {formatShortDate(document.updatedAt)}
                 </p>
               </Link>
             );

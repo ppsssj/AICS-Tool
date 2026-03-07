@@ -15,7 +15,7 @@ export function DocumentPage() {
   const document = documents.find((item) => item.id === docId && item.projectId === projectId);
 
   if (!document || !currentUserId) {
-    return <EmptyState title="Document not found" description="The requested document could not be found in this project." />;
+    return <EmptyState title="문서를 찾을 수 없습니다" description="이 프로젝트에서 요청한 문서를 찾을 수 없습니다." />;
   }
 
   const relatedTasks = tasks.filter((task) => task.projectId === projectId);
@@ -25,14 +25,14 @@ export function DocumentPage() {
     <div className="space-y-8">
       <PageHeader
         title={document.title}
-        description="This editor stays intentionally simple for the MVP, with a calmer writing surface and cleaner metadata grouping."
+        description="MVP 단계에서는 단순한 편집기로 유지하되, 작성 영역과 메타데이터를 깔끔하게 분리했습니다."
         actions={
           <>
             <Button variant="secondary" onClick={() => updateDocument(document.id, { ...document, authorId: currentUserId })}>
-              Save changes
+              변경 저장
             </Button>
             <Button variant="ghost" onClick={() => { deleteDocument(document.id); navigate(`/projects/${projectId}`); }}>
-              Delete document
+              문서 삭제
             </Button>
           </>
         }
@@ -41,13 +41,13 @@ export function DocumentPage() {
       <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
         <Card className="border-slate-200/70">
           <div className="grid gap-5">
-            <Field label="Document title">
+            <Field label="문서 제목">
               <Input value={document.title} onChange={(event) => updateDocument(document.id, { ...document, title: event.target.value, authorId: currentUserId })} />
             </Field>
-            <Field label="Document body">
+            <Field label="문서 본문">
               <Textarea className="min-h-[360px]" value={document.body} onChange={(event) => updateDocument(document.id, { ...document, body: event.target.value, authorId: currentUserId })} />
             </Field>
-            <Field label="Tags">
+            <Field label="태그">
               <Input value={document.tags.join(', ')} onChange={(event) => updateDocument(document.id, { ...document, tags: event.target.value.split(',').map((tag) => tag.trim()).filter(Boolean), authorId: currentUserId })} />
             </Field>
           </div>
@@ -55,10 +55,10 @@ export function DocumentPage() {
 
         <div className="space-y-6">
           <Card className="border-slate-200/70">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Metadata</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">메타데이터</p>
             <div className="mt-5 space-y-4 text-sm text-slate-600">
-              <p>Author: {author?.name ?? 'Unknown'}</p>
-              <p>Updated: {formatDateTime(document.updatedAt)}</p>
+              <p>작성자: {author?.name ?? '알 수 없음'}</p>
+              <p>수정일: {formatDateTime(document.updatedAt)}</p>
               <div className="flex flex-wrap gap-2">
                 {document.tags.map((tag) => (
                   <Badge key={tag} tone="info">{tag}</Badge>
@@ -70,11 +70,11 @@ export function DocumentPage() {
           <Card className="border-slate-200/70">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Linked execution</p>
-                <h2 className="mt-2 text-[24px] font-semibold tracking-[-0.03em] text-slate-950">Related tasks</h2>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">연결 작업</p>
+                <h2 className="mt-2 text-[24px] font-semibold tracking-[-0.03em] text-slate-950">관련 작업</h2>
               </div>
               <Link className="text-sm font-semibold text-accent-700" to={`/projects/${projectId}/tasks`}>
-                Open board
+                보드 열기
               </Link>
             </div>
             <div className="mt-5 grid gap-3">
