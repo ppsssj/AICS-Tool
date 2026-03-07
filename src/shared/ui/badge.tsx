@@ -8,7 +8,7 @@ const toneClasses: Record<BadgeTone, string> = {
   success: 'border border-emerald-200/70 bg-emerald-50 text-success',
   warning: 'border border-amber-200/70 bg-amber-50 text-warning',
   danger: 'border border-rose-200/70 bg-rose-50 text-danger',
-  info: 'border border-accent-200/80 bg-accent-50 text-accent-700',
+  info: 'border border-[rgb(var(--theme-accent-200)_/_0.8)] bg-accent-50 text-accent-700',
 };
 
 interface BadgeProps {

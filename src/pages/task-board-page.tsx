@@ -33,7 +33,6 @@ export function TaskBoardPage() {
     <div className="space-y-8">
       <PageHeader
         title={`${project.title} 작업 보드`}
-        description="칸반 보드는 가볍게 유지하되, 상태와 마감일, 연결 문서가 한눈에 들어오도록 정리했습니다."
         actions={<Button onClick={() => { setEditingTask(undefined); setShowModal(true); }}>작업 생성</Button>}
       />
       <div className="grid gap-4 xl:grid-cols-4">

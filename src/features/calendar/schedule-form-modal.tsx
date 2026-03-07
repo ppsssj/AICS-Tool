@@ -41,7 +41,6 @@ export function ScheduleFormModal({ open, projects, ownerId, initialType = 'Lab'
       open={open}
       onClose={onClose}
       title="일정 생성"
-      description="학생 연구진 중심 팀에 맞는 주간 형식으로 프로젝트 및 연구실 반복 일정을 등록합니다."
       footer={
         <div className="flex justify-end gap-3">
           <Button variant="secondary" onClick={onClose}>취소</Button>

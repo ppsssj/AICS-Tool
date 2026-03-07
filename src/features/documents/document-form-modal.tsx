@@ -44,7 +44,6 @@ export function DocumentFormModal({ open, projectId, tasks, authorId, initialVal
       open={open}
       onClose={onClose}
       title={initialValue ? '문서 수정' : '문서 생성'}
-      description="현재는 단순한 구조화 텍스트로 작성하고, 이후 더 풍부한 에디터로 교체할 수 있도록 유지합니다."
       footer={
         <div className="flex justify-end gap-3">
           <Button variant="secondary" onClick={onClose}>취소</Button>

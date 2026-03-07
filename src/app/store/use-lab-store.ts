@@ -16,6 +16,7 @@ import type {
   Weekday,
 } from '@/entities/models';
 import { mockDocuments, mockProjects, mockSchedules, mockTasks, mockTimetableBlocks, mockUsers } from '@/mock/data';
+import type { AppTheme } from '@/shared/lib/themes';
 
 interface ProjectInput {
   title: string;
@@ -31,6 +32,7 @@ interface DocumentInput {
   tags: string[];
   authorId: string;
   relatedTaskIds: string[];
+  attachments?: Document['attachments'];
 }
 
 interface TaskInput {
@@ -74,6 +76,7 @@ interface LabStore {
   timetableBlocks: TimetableBlock[];
   currentUserId: string | null;
   isAuthenticated: boolean;
+  appTheme: AppTheme;
   login: (email: string) => void;
   logout: () => void;
   createProject: (input: ProjectInput) => void;
@@ -89,6 +92,7 @@ interface LabStore {
   createSchedule: (input: ScheduleInput) => void;
   createTimetableBlock: (input: TimetableBlockInput) => void;
   setCurrentUserRole: (role: Role) => void;
+  setAppTheme: (theme: AppTheme) => void;
 }
 
 const now = () => new Date().toISOString();
@@ -119,6 +123,7 @@ export const useLabStore = create<LabStore>()(
       timetableBlocks: mockTimetableBlocks,
       currentUserId: 'u3',
       isAuthenticated: false,
+      appTheme: 'silver',
       login: (email) => {
         const match = get().users.find((user) => user.email.toLowerCase() === email.toLowerCase()) ?? get().users[2];
         set({ currentUserId: match.id, isAuthenticated: true });
@@ -142,7 +147,7 @@ export const useLabStore = create<LabStore>()(
       createDocument: (input) => {
         const id = createId('d');
         set((state) => ({
-          documents: [{ id, ...input, updatedAt: now() }, ...state.documents],
+          documents: [{ id, ...input, attachments: input.attachments ?? [], updatedAt: now() }, ...state.documents],
           tasks: syncDocumentLinks(state.tasks, id, input.relatedTaskIds),
           projects: state.projects.map((project) => (project.id === input.projectId ? { ...project, updatedAt: now() } : project)),
         }));
@@ -208,6 +213,7 @@ export const useLabStore = create<LabStore>()(
         set((state) => ({
           users: state.users.map((user) => (user.id === state.currentUserId ? { ...user, role } : user)),
         })),
+      setAppTheme: (theme) => set({ appTheme: theme }),
     }),
     {
       name: 'lab-workflow-os',
@@ -220,6 +226,7 @@ export const useLabStore = create<LabStore>()(
         timetableBlocks: state.timetableBlocks,
         currentUserId: state.currentUserId,
         isAuthenticated: state.isAuthenticated,
+        appTheme: state.appTheme,
       }),
     },
   ),

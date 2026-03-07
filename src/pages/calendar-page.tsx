@@ -748,7 +748,6 @@ export function CalendarPage() {
     <div className="space-y-8">
       <PageHeader
         title="캘린더"
-        description="반복 일정, 프로젝트 일정, 개인 가능 시간을 한 화면에서 조정하는 연구실용 스케줄링 화면입니다."
         actions={
           <>
             <Button variant="secondary" onClick={() => setShowTimetableModal(true)}>

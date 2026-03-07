@@ -53,7 +53,6 @@ export function TaskFormModal({ open, projectId, users, documents, initialValue,
       open={open}
       onClose={onClose}
       title={initialValue ? '작업 수정' : '작업 생성'}
-      description="담당자, 마감일, 연결 문서를 중심으로 실무에 바로 쓸 수 있는 작업 카드를 유지합니다."
       footer={
         <div className="flex justify-end gap-3">
           <Button variant="secondary" onClick={onClose}>취소</Button>

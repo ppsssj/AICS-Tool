@@ -61,10 +61,10 @@ export const mockTasks: Task[] = [
 ];
 
 export const mockDocuments: Document[] = [
-  { id: 'd1', projectId: 'p1', title: '이미징 파일명 표준 v2', body: '이 문서는 공용 이미징 드라이브를 위한 샘플 이름, 현미경 런 식별자, 업로드 규칙을 정의합니다.\n\n1. 모든 배치는 프로젝트와 작업자 이니셜로 시작합니다.\n2. 촬영 날짜는 YYYYMMDD 형식을 사용합니다.\n3. 실패한 촬영은 _FAILED 접미사를 붙이고 검토 열에 문제를 기록합니다.', tags: ['프로토콜', '온보딩', '이미징'], authorId: 'u2', updatedAt: '2026-03-05T12:00:00.000Z', relatedTaskIds: ['t1', 't6'] },
-  { id: 'd2', projectId: 'p1', title: '파일럿 주석 검토 노트', body: '주석 작업자는 흐림, 저대비, 플레이트 정렬 문제를 표시해야 합니다. 교수진 검토가 필요한 예시는 공유 스프레드시트에 기록합니다.', tags: ['주석', '품질관리'], authorId: 'u4', updatedAt: '2026-03-05T19:10:00.000Z', relatedTaskIds: ['t2'] },
-  { id: 'd3', projectId: 'p3', title: '모집 커뮤니케이션 초안', body: '참여자 안내에는 평일 가능 시간 확인, 취소 정책 안내, 간단한 방문 체크리스트가 포함되어야 합니다.', tags: ['모집', '커뮤니케이션'], authorId: 'u3', updatedAt: '2026-03-02T16:00:00.000Z', relatedTaskIds: ['t4'] },
-  { id: 'd4', projectId: 'p2', title: '로봇 벤치 사전 점검 체크리스트', body: '자동 이송 세션 전마다 비상 정지 장치 접근성, 피펫 정렬, 드라이런 보정을 확인합니다.', tags: ['안전', '자동화'], authorId: 'u2', updatedAt: '2026-03-04T10:20:00.000Z', relatedTaskIds: ['t3'] },
+  { id: 'd1', projectId: 'p1', title: '이미징 파일명 표준 v2', body: '이 문서는 공용 이미징 드라이브를 위한 샘플 이름, 현미경 런 식별자, 업로드 규칙을 정의합니다.\n\n1. 모든 배치는 프로젝트와 작업자 이니셜로 시작합니다.\n2. 촬영 날짜는 YYYYMMDD 형식을 사용합니다.\n3. 실패한 촬영은 _FAILED 접미사를 붙이고 검토 열에 문제를 기록합니다.', tags: ['프로토콜', '온보딩', '이미징'], authorId: 'u2', updatedAt: '2026-03-05T12:00:00.000Z', relatedTaskIds: ['t1', 't6'], attachments: [] },
+  { id: 'd2', projectId: 'p1', title: '파일럿 주석 검토 노트', body: '주석 작업자는 흐림, 저대비, 플레이트 정렬 문제를 표시해야 합니다. 교수진 검토가 필요한 예시는 공유 스프레드시트에 기록합니다.', tags: ['주석', '품질관리'], authorId: 'u4', updatedAt: '2026-03-05T19:10:00.000Z', relatedTaskIds: ['t2'], attachments: [] },
+  { id: 'd3', projectId: 'p3', title: '모집 커뮤니케이션 초안', body: '참여자 안내에는 평일 가능 시간 확인, 취소 정책 안내, 간단한 방문 체크리스트가 포함되어야 합니다.', tags: ['모집', '커뮤니케이션'], authorId: 'u3', updatedAt: '2026-03-02T16:00:00.000Z', relatedTaskIds: ['t4'], attachments: [] },
+  { id: 'd4', projectId: 'p2', title: '로봇 벤치 사전 점검 체크리스트', body: '자동 이송 세션 전마다 비상 정지 장치 접근성, 피펫 정렬, 드라이런 보정을 확인합니다.', tags: ['안전', '자동화'], authorId: 'u2', updatedAt: '2026-03-04T10:20:00.000Z', relatedTaskIds: ['t3'], attachments: [] },
 ];
 
 export const mockSchedules: Schedule[] = [

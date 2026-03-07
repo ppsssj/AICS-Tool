@@ -39,6 +39,16 @@ export interface Document {
   authorId: string;
   updatedAt: string;
   relatedTaskIds: string[];
+  attachments: DocumentAttachment[];
+}
+
+export interface DocumentAttachment {
+  id: string;
+  name: string;
+  type: string;
+  size: number;
+  uploadedAt: string;
+  dataUrl: string;
 }
 
 export interface Task {

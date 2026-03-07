@@ -3,7 +3,31 @@
 @tailwind utilities;
 
 :root {
-  color: #142033;
+  --theme-ink: 20 32 51;
+  --theme-mist: 245 246 248;
+  --theme-line: 217 221 229;
+  --theme-panel: 255 255 255;
+  --theme-shell: 241 243 246;
+  --theme-cloud: 251 251 252;
+  --theme-accent-50: 239 244 255;
+  --theme-accent-100: 219 231 255;
+  --theme-accent-200: 190 210 255;
+  --theme-accent-500: 75 116 217;
+  --theme-accent-600: 60 98 192;
+  --theme-accent-700: 49 80 161;
+  --theme-sidebar-bg: 242 245 248;
+  --theme-sidebar-border: 218 225 234;
+  --theme-sidebar-card-bg: 255 255 255;
+  --theme-sidebar-card-border: 233 237 243;
+  --theme-sidebar-nav-active-bg: 255 255 255;
+  --theme-sidebar-nav-active-border: 231 236 242;
+  --theme-sidebar-nav-hover-bg: 255 255 255;
+  --theme-app-panel: 251 251 252;
+  --theme-app-header: 255 255 255;
+  --theme-app-border: 232 236 242;
+  --theme-card-bg: 255 255 255;
+  --theme-card-border: 236 239 244;
+  color: rgb(var(--theme-ink));
   background:
     radial-gradient(circle at top, rgba(255, 255, 255, 0.92), rgba(245, 246, 248, 0.94) 30%, rgba(241, 243, 246, 1) 75%);
   font-family: "SF Pro Display", "SF Pro Text", "Segoe UI", sans-serif;
@@ -13,6 +37,87 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+:root[data-theme='mist'] {
+  --theme-ink: 28 40 56;
+  --theme-mist: 244 247 249;
+  --theme-line: 213 223 230;
+  --theme-panel: 255 255 255;
+  --theme-shell: 237 242 245;
+  --theme-cloud: 250 252 253;
+  --theme-accent-50: 235 244 247;
+  --theme-accent-100: 212 229 236;
+  --theme-accent-200: 184 213 223;
+  --theme-accent-500: 104 137 158;
+  --theme-accent-600: 86 118 139;
+  --theme-accent-700: 68 99 118;
+  --theme-sidebar-bg: 240 244 247;
+  --theme-sidebar-border: 215 224 231;
+  --theme-sidebar-card-bg: 254 255 255;
+  --theme-sidebar-card-border: 231 238 243;
+  --theme-sidebar-nav-active-bg: 251 253 254;
+  --theme-sidebar-nav-active-border: 228 235 240;
+  --theme-sidebar-nav-hover-bg: 248 251 253;
+  --theme-app-panel: 250 252 253;
+  --theme-app-header: 255 255 255;
+  --theme-app-border: 228 236 241;
+  --theme-card-bg: 254 255 255;
+  --theme-card-border: 232 238 243;
+}
+
+:root[data-theme='sky'] {
+  --theme-ink: 24 36 56;
+  --theme-mist: 244 248 252;
+  --theme-line: 212 224 239;
+  --theme-panel: 255 255 255;
+  --theme-shell: 236 243 249;
+  --theme-cloud: 249 252 255;
+  --theme-accent-50: 237 245 255;
+  --theme-accent-100: 214 230 251;
+  --theme-accent-200: 180 210 243;
+  --theme-accent-500: 86 134 202;
+  --theme-accent-600: 70 114 179;
+  --theme-accent-700: 57 95 151;
+  --theme-sidebar-bg: 239 245 250;
+  --theme-sidebar-border: 211 224 238;
+  --theme-sidebar-card-bg: 255 255 255;
+  --theme-sidebar-card-border: 229 237 246;
+  --theme-sidebar-nav-active-bg: 249 252 255;
+  --theme-sidebar-nav-active-border: 223 233 243;
+  --theme-sidebar-nav-hover-bg: 246 250 254;
+  --theme-app-panel: 248 251 255;
+  --theme-app-header: 253 255 255;
+  --theme-app-border: 224 233 243;
+  --theme-card-bg: 253 255 255;
+  --theme-card-border: 229 237 246;
+}
+
+:root[data-theme='sand'] {
+  --theme-ink: 45 39 35;
+  --theme-mist: 247 243 238;
+  --theme-line: 228 219 208;
+  --theme-panel: 255 255 255;
+  --theme-shell: 244 238 232;
+  --theme-cloud: 251 248 244;
+  --theme-accent-50: 249 239 230;
+  --theme-accent-100: 241 222 203;
+  --theme-accent-200: 228 196 164;
+  --theme-accent-500: 184 132 98;
+  --theme-accent-600: 160 111 80;
+  --theme-accent-700: 131 88 61;
+  --theme-sidebar-bg: 244 239 234;
+  --theme-sidebar-border: 226 216 205;
+  --theme-sidebar-card-bg: 255 252 249;
+  --theme-sidebar-card-border: 236 227 216;
+  --theme-sidebar-nav-active-bg: 255 250 245;
+  --theme-sidebar-nav-active-border: 235 223 211;
+  --theme-sidebar-nav-hover-bg: 250 246 241;
+  --theme-app-panel: 251 248 244;
+  --theme-app-header: 255 252 249;
+  --theme-app-border: 235 226 216;
+  --theme-card-bg: 255 252 249;
+  --theme-card-border: 239 230 220;
 }
 
 * {
@@ -28,8 +133,9 @@ body,
 body {
   margin: 0;
   min-width: 320px;
+  color: rgb(var(--theme-ink));
   background:
-    radial-gradient(circle at top left, rgba(255, 255, 255, 0.92), rgba(245, 246, 248, 0.94) 32%, rgba(241, 243, 246, 1) 72%);
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.92), rgba(var(--theme-mist), 0.96) 32%, rgba(var(--theme-shell), 1) 72%);
 }
 
 a {
@@ -45,5 +151,5 @@ select {
 }
 
 ::selection {
-  background: rgba(75, 116, 217, 0.16);
+  background: rgb(var(--theme-accent-100) / 0.72);
 }

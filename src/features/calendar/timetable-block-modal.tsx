@@ -33,7 +33,6 @@ export function TimetableBlockModal({ open, userId, onClose, onSubmit }: Timetab
       open={open}
       onClose={onClose}
       title="시간표 블록 등록"
-      description="수업, 불가 시간, 연구실 가능 시간을 등록합니다."
       footer={
         <div className="flex justify-end gap-3">
           <Button variant="secondary" onClick={onClose}>취소</Button>

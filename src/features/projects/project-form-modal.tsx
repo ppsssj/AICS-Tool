@@ -45,7 +45,6 @@ export function ProjectFormModal({ open, users, initialValue, onClose, onSubmit 
       open={open}
       onClose={onClose}
       title={initialValue ? '프로젝트 수정' : '프로젝트 생성'}
-      description="프로젝트 설정은 가볍게 유지하고, 빠르게 연구 워크플로우를 시작할 수 있도록 구성합니다."
       footer={
         <div className="flex justify-end gap-3">
           <Button variant="secondary" onClick={onClose}>취소</Button>

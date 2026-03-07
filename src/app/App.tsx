@@ -1,5 +1,7 @@
+import { useEffect } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AppLayout } from '@/app/layouts/app-layout';
+import { useLabStore } from '@/app/store/use-lab-store';
 import { ProtectedRoute } from '@/features/auth/protected-route';
 import { CalendarPage } from '@/pages/calendar-page';
 import { DashboardPage } from '@/pages/dashboard-page';
@@ -11,9 +13,20 @@ import { ProjectsPage } from '@/pages/projects-page';
 import { SettingsPage } from '@/pages/settings-page';
 import { TaskBoardPage } from '@/pages/task-board-page';
 
+function ThemeEffect() {
+  const appTheme = useLabStore((state) => state.appTheme);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = appTheme;
+  }, [appTheme]);
+
+  return null;
+}
+
 export function App() {
   return (
     <BrowserRouter>
+      <ThemeEffect />
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route

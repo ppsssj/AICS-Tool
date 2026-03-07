@@ -153,10 +153,8 @@ export function DashboardPage() {
     tasks,
     timetableBlocks,
     updateTaskStatus,
-    users,
   } = useLabStore();
 
-  const currentUser = users.find((user) => user.id === currentUserId);
   const referenceDate = getReferenceDate(tasks);
   const myProjects = projects.filter((project) => project.memberIds.includes(currentUserId ?? ''));
   const myProjectIds = new Set(myProjects.map((project) => project.id));
@@ -336,7 +334,7 @@ export function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      <PageHeader title={`${currentUser?.name.split(' ')[0] ?? '연구원'}님, 다시 오셨네요`} />
+      <PageHeader title="대시보드" />
 
       <Card className="overflow-hidden border-slate-200/70 bg-[linear-gradient(135deg,rgba(255,255,255,0.97),rgba(245,247,252,0.94))] py-5">
         <div className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
