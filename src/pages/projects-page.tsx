@@ -1,34 +1,103 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useLabStore } from '@/app/store/use-lab-store';
-import type { Project } from '@/entities/models';
+import type { Project, Schedule } from '@/entities/models';
 import { ProjectFormModal } from '@/features/projects/project-form-modal';
-import { formatShortDate } from '@/shared/lib/date';
-import { projectStatusLabels } from '@/shared/lib/labels';
+import { compareWeekday, formatShortDate, startOfDay } from '@/shared/lib/date';
+import { projectStatusLabels, weekdayLabels } from '@/shared/lib/labels';
+import type { BadgeTone } from '@/shared/ui/badge';
 import { Badge } from '@/shared/ui/badge';
 import { Button } from '@/shared/ui/button';
 import { Card } from '@/shared/ui/card';
 import { Modal } from '@/shared/ui/modal';
 import { PageHeader } from '@/shared/ui/page-header';
 
+const DAY_IN_MS = 24 * 60 * 60 * 1000;
+
+function parseDueDate(value: string): Date {
+  return new Date(`${value}T09:00:00`);
+}
+
+function daysFromToday(value: string, referenceDate: Date): number {
+  const diff = startOfDay(parseDueDate(value)).getTime() - referenceDate.getTime();
+  return Math.floor(diff / DAY_IN_MS);
+}
+
+function getProjectTone(project: Project): BadgeTone {
+  if (project.status === 'Active') {
+    return 'success';
+  }
+
+  if (project.status === 'Planning') {
+    return 'warning';
+  }
+
+  return 'neutral';
+}
+
+function formatScheduleLabel(schedule: Schedule): string {
+  return `${weekdayLabels[schedule.day]} ${schedule.startTime}`;
+}
+
 export function ProjectsPage() {
-  const { createProject, deleteProject, documents, projects, tasks, updateProject, users } = useLabStore();
+  const { createProject, deleteProject, documents, projects, schedules, tasks, updateProject, users } = useLabStore();
   const [open, setOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | undefined>();
   const [projectToDelete, setProjectToDelete] = useState<Project | undefined>();
 
-  const projectUsage = useMemo(
+  const referenceDate = startOfDay(new Date());
+
+  const projectHealth = useMemo(
     () =>
-      new Map(
-        projects.map((project) => [
-          project.id,
-          {
-            documentCount: documents.filter((document) => document.projectId === project.id).length,
-            taskCount: tasks.filter((task) => task.projectId === project.id).length,
-          },
-        ]),
-      ),
-    [documents, projects, tasks],
+      projects
+        .map((project) => {
+          const projectTasks = tasks.filter((task) => task.projectId === project.id && task.status !== 'Done');
+          const projectDocuments = documents.filter((document) => document.projectId === project.id);
+          const projectSchedules = schedules
+            .filter((schedule) => schedule.projectId === project.id)
+            .sort(
+              (left, right) =>
+                compareWeekday(left.day, right.day) || left.startTime.localeCompare(right.startTime),
+            );
+          const overdue = projectTasks.filter((task) => daysFromToday(task.dueDate, referenceDate) < 0);
+          const dueThisWeek = projectTasks.filter((task) => {
+            const delta = daysFromToday(task.dueDate, referenceDate);
+            return delta >= 0 && delta <= 6;
+          });
+          const reviewWaiting = projectTasks.filter((task) => task.status === 'Review');
+          const advisorCheck = projectTasks.filter(
+            (task) => task.status !== 'Review' && task.title.toLowerCase().includes('review'),
+          );
+          const blocked = projectTasks.filter((task) => !task.assigneeId);
+          const nextSession = projectSchedules[0];
+          const coordinationIssueCount = projectSchedules.filter((schedule) => {
+            const sameDayTasks = projectTasks.filter((task) => task.title.toLowerCase().includes('schedule'));
+            return sameDayTasks.length > 0 && schedule.type === 'Project';
+          }).length;
+          const score =
+            overdue.length * 4 +
+            dueThisWeek.length * 2 +
+            reviewWaiting.length * 2 +
+            blocked.length * 3 +
+            advisorCheck.length +
+            coordinationIssueCount * 2;
+
+          return {
+            project,
+            projectDocuments,
+            projectTasks,
+            overdue,
+            dueThisWeek,
+            reviewWaiting,
+            advisorCheck,
+            blocked,
+            nextSession,
+            coordinationIssueCount,
+            score,
+          };
+        })
+        .sort((left, right) => right.score - left.score || right.project.updatedAt.localeCompare(left.project.updatedAt)),
+    [documents, projects, referenceDate, schedules, tasks],
   );
 
   function handleOpenCreate() {
@@ -43,62 +112,131 @@ export function ProjectsPage() {
 
   return (
     <div className="space-y-8">
-      <PageHeader title="프로젝트" actions={<Button onClick={handleOpenCreate}>프로젝트 생성</Button>} />
+      <PageHeader
+        title="Projects"
+        description="Scan project health, workload pressure, and the next place that needs coordination."
+        actions={<Button onClick={handleOpenCreate}>Create project</Button>}
+      />
 
       <div className="grid gap-5 xl:grid-cols-2">
-        {projects.map((project) => {
-          const usage = projectUsage.get(project.id);
+        {projectHealth.map((item) => {
+          const headline =
+            item.overdue.length > 0
+              ? `${item.overdue.length} overdue`
+              : item.dueThisWeek.length > 0
+                ? `${item.dueThisWeek.length} due this week`
+                : item.reviewWaiting.length > 0
+                  ? `${item.reviewWaiting.length} review waiting`
+                  : item.nextSession
+                    ? `Next session ${formatScheduleLabel(item.nextSession)}`
+                    : 'Stable this week';
+
+          const secondarySignals = [
+            item.reviewWaiting.length > 0 ? `${item.reviewWaiting.length} review waiting` : null,
+            item.blocked.length > 0 ? `${item.blocked.length} blocked` : null,
+            item.advisorCheck.length > 0 ? `${item.advisorCheck.length} advisor check` : null,
+            item.coordinationIssueCount > 0 ? `${item.coordinationIssueCount} coordination issue` : null,
+          ].filter(Boolean);
 
           return (
-            <Card key={project.id} className="group flex flex-col gap-6 overflow-hidden border-slate-200/70 p-0">
+            <Card key={item.project.id} className="group flex flex-col gap-5 overflow-hidden border-slate-200/70 p-0">
               <div className="border-b border-slate-200/80 bg-slate-50/70 px-6 py-4">
-                <div className="flex items-center justify-between gap-3">
+                <div className="flex items-start justify-between gap-3">
                   <div className="flex flex-wrap items-center gap-2">
-                    <Badge tone={project.status === 'Active' ? 'success' : project.status === 'Planning' ? 'warning' : 'neutral'}>
-                      {projectStatusLabels[project.status]}
+                    <Badge tone={getProjectTone(item.project)}>{projectStatusLabels[item.project.status]}</Badge>
+                    <Badge tone={item.score >= 6 ? 'danger' : item.score >= 3 ? 'warning' : 'success'}>
+                      {item.score >= 6 ? 'Needs attention' : item.score >= 3 ? 'Watch this week' : 'Healthy'}
                     </Badge>
-                    <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-                      업데이트 {formatShortDate(project.updatedAt)}
-                    </span>
                   </div>
-                  <span className="text-xs text-slate-400">구성원 {project.memberIds.length}명</span>
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                    Updated {formatShortDate(item.project.updatedAt)}
+                  </span>
                 </div>
               </div>
 
               <div className="px-6">
-                <h2 className="text-[24px] font-semibold tracking-[-0.03em] text-slate-950">{project.title}</h2>
-                <p className="mt-3 max-w-2xl text-[15px] leading-7 text-slate-500">{project.description}</p>
+                <h2 className="text-[24px] font-semibold tracking-[-0.03em] text-slate-950">
+                  {item.project.title}
+                </h2>
+                <p className="mt-3 text-[19px] font-semibold tracking-[-0.02em] text-slate-900">
+                  {headline}
+                </p>
+                <p className="mt-2 text-sm leading-6 text-slate-500">{item.project.description}</p>
               </div>
 
-              <div className="grid gap-4 px-6 md:grid-cols-[0.85fr_1.15fr]">
-                <div className="rounded-[22px] border border-slate-200/80 bg-slate-50/70 p-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">팀 규모</p>
-                  <p className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-slate-950">{project.memberIds.length}</p>
-                  <p className="mt-2 text-sm leading-6 text-slate-500">현재 이 프로젝트에 포함된 연구 인원입니다.</p>
-                </div>
-                <div className="rounded-[22px] border border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.92),rgba(244,247,255,0.92))] p-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">워크스페이스 이동</p>
-                  <Link
-                    className="mt-3 inline-flex items-center gap-2 text-[15px] font-semibold tracking-[-0.01em] text-accent-700 transition group-hover:text-accent-600"
-                    to={`/projects/${project.id}`}
-                  >
-                    워크스페이스 열기
-                    <span aria-hidden="true">{'>'}</span>
-                  </Link>
-                  <p className="mt-2 text-sm leading-6 text-slate-500">
-                    문서 {usage?.documentCount ?? 0}개, 작업 {usage?.taskCount ?? 0}개가 연결되어 있습니다.
+              <div className="grid gap-4 px-6 md:grid-cols-[1.1fr_0.9fr]">
+                <div className="rounded-[22px] border border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(246,248,252,0.92))] p-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                    Operational signals
                   </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {secondarySignals.length > 0 ? (
+                      secondarySignals.map((signal) => (
+                        <Badge key={`${item.project.id}-${signal}`} tone="info">
+                          {signal}
+                        </Badge>
+                      ))
+                    ) : (
+                      <Badge tone="success">No immediate risk signal</Badge>
+                    )}
+                  </div>
+                  {item.nextSession ? (
+                    <p className="mt-4 text-sm text-slate-500">
+                      Next shared session: {formatScheduleLabel(item.nextSession)} at {item.nextSession.location}
+                    </p>
+                  ) : (
+                    <p className="mt-4 text-sm text-slate-500">No project session scheduled yet.</p>
+                  )}
+                </div>
+
+                <div className="rounded-[22px] border border-slate-200/80 bg-slate-50/70 p-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                    Secondary metadata
+                  </p>
+                  <div className="mt-3 grid grid-cols-3 gap-3 text-sm text-slate-500">
+                    <div>
+                      <p className="text-[22px] font-semibold tracking-[-0.03em] text-slate-950">
+                        {item.project.memberIds.length}
+                      </p>
+                      <p>Members</p>
+                    </div>
+                    <div>
+                      <p className="text-[22px] font-semibold tracking-[-0.03em] text-slate-950">
+                        {item.projectDocuments.length}
+                      </p>
+                      <p>Docs</p>
+                    </div>
+                    <div>
+                      <p className="text-[22px] font-semibold tracking-[-0.03em] text-slate-950">
+                        {item.projectTasks.length}
+                      </p>
+                      <p>Open tasks</p>
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              <div className="flex flex-wrap justify-between gap-3 border-t border-slate-200/80 px-6 py-5">
-                <div className="text-sm text-slate-500">프로젝트 운영 상태를 바로 수정할 수 있습니다.</div>
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200/80 px-6 py-5">
+                <div className="flex flex-wrap gap-2">
+                  <Link
+                    className="inline-flex items-center justify-center rounded-[14px] border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+                    to={`/projects/${item.project.id}`}
+                  >
+                    Open workspace
+                  </Link>
+                  <Link
+                    className="inline-flex items-center justify-center rounded-[14px] border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+                    to={`/projects/${item.project.id}/tasks`}
+                  >
+                    Open tasks
+                  </Link>
+                </div>
                 <div className="flex flex-wrap gap-3">
-                  <Button variant="secondary" onClick={() => handleOpenEdit(project)}>
-                    수정
+                  <Button variant="secondary" onClick={() => handleOpenEdit(item.project)}>
+                    Edit
                   </Button>
-                  <Button variant="ghost" onClick={() => setProjectToDelete(project)}>
-                    삭제
+                  <Button variant="ghost" onClick={() => setProjectToDelete(item.project)}>
+                    Delete
                   </Button>
                 </div>
               </div>
@@ -124,11 +262,11 @@ export function ProjectsPage() {
       <Modal
         open={Boolean(projectToDelete)}
         onClose={() => setProjectToDelete(undefined)}
-        title="프로젝트 삭제"
+        title="Delete project"
         footer={
           <div className="flex justify-end gap-3">
             <Button variant="secondary" onClick={() => setProjectToDelete(undefined)}>
-              취소
+              Cancel
             </Button>
             <Button
               variant="danger"
@@ -136,21 +274,22 @@ export function ProjectsPage() {
                 if (!projectToDelete) {
                   return;
                 }
+
                 deleteProject(projectToDelete.id);
                 setProjectToDelete(undefined);
               }}
             >
-              삭제
+              Delete
             </Button>
           </div>
         }
       >
         <div className="space-y-4 text-sm text-slate-600">
           <p className="leading-6">
-            <span className="font-semibold text-slate-900">{projectToDelete?.title}</span> 프로젝트를 정말 삭제하시겠습니까?
+            <span className="font-semibold text-slate-900">{projectToDelete?.title}</span> will be permanently removed.
           </p>
           <p className="leading-6">
-            연결된 문서, 작업, 일정도 함께 제거됩니다.
+            Documents, tasks, and project schedules connected to this workspace are deleted together.
           </p>
         </div>
       </Modal>

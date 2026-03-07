@@ -1,4 +1,4 @@
-import { Link, NavLink, Outlet } from 'react-router-dom';
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useLabStore } from '@/app/store/use-lab-store';
 import { roleLabels } from '@/shared/lib/labels';
 import { Button } from '@/shared/ui/button';
@@ -10,9 +10,85 @@ const navItems = [
   { to: '/settings', label: '설정' },
 ];
 
+interface BreadcrumbItem {
+  label: string;
+  to?: string;
+}
+
+function buildBreadcrumbs(
+  pathname: string,
+  projects: Array<{ id: string; title: string }>,
+  documents: Array<{ id: string; projectId: string; title: string }>,
+): BreadcrumbItem[] {
+  const segments = pathname.split('/').filter(Boolean);
+
+  if (segments[0] === 'dashboard') {
+    return [{ label: '대시보드' }];
+  }
+
+  if (segments[0] === 'calendar') {
+    return [{ label: '캘린더' }];
+  }
+
+  if (segments[0] === 'settings') {
+    return [{ label: '설정' }];
+  }
+
+  if (segments[0] === 'projects' && !segments[1]) {
+    return [{ label: '프로젝트' }];
+  }
+
+  if (segments[0] === 'projects' && segments[1]) {
+    const project = projects.find((item) => item.id === segments[1]);
+    const items: BreadcrumbItem[] = [
+      { label: '프로젝트', to: '/projects' },
+      { label: project?.title ?? '프로젝트', to: `/projects/${segments[1]}` },
+    ];
+
+    if (segments[2] === 'docs' && !segments[3]) {
+      items.push({ label: '문서' });
+      return items;
+    }
+
+    if (segments[2] === 'docs' && segments[3]) {
+      const document = documents.find((item) => item.id === segments[3] && item.projectId === segments[1]);
+      items.push({ label: '문서', to: `/projects/${segments[1]}/docs` });
+      items.push({ label: document?.title ?? '문서' });
+      return items;
+    }
+
+    if (segments[2] === 'tasks') {
+      items.push({ label: '작업' });
+      return items;
+    }
+
+    if (segments[2] === 'schedule') {
+      items.push({ label: '일정' });
+      return items;
+    }
+
+    if (segments[2] === 'members') {
+      items.push({ label: '멤버' });
+      return items;
+    }
+
+    items.push({ label: '개요' });
+    return items;
+  }
+
+  return [];
+}
+
 export function AppLayout() {
-  const currentUser = useLabStore((state) => state.users.find((user) => user.id === state.currentUserId));
+  const location = useLocation();
+  const currentUserId = useLabStore((state) => state.currentUserId);
+  const documents = useLabStore((state) => state.documents);
   const logout = useLabStore((state) => state.logout);
+  const projects = useLabStore((state) => state.projects);
+  const users = useLabStore((state) => state.users);
+  const currentUser = users.find((user) => user.id === currentUserId);
+  const breadcrumbs = buildBreadcrumbs(location.pathname, projects, documents);
+  const contextLabel = breadcrumbs.length > 1 ? breadcrumbs.slice(-2).map((item) => item.label).join(' / ') : breadcrumbs[0]?.label;
 
   return (
     <div className="min-h-screen bg-shell text-slate-950">
@@ -93,7 +169,27 @@ export function AppLayout() {
         </aside>
 
         <div className="flex min-h-screen flex-col overflow-hidden rounded-[30px] border border-[rgb(var(--theme-app-border)_/_0.82)] bg-[rgb(var(--theme-app-panel)_/_0.9)] shadow-soft backdrop-blur-sm">
-          <header className="border-b border-[rgb(var(--theme-app-border)_/_0.8)] bg-[rgb(var(--theme-app-header)_/_0.82)] px-8 py-5 backdrop-blur" />
+          <header className="border-b border-[rgb(var(--theme-app-border)_/_0.8)] bg-[rgb(var(--theme-app-header)_/_0.82)] px-8 py-5 backdrop-blur">
+            <div className="flex flex-col gap-2">
+              <div className="flex flex-wrap items-center gap-2 text-[12px] font-medium text-slate-500">
+                {breadcrumbs.map((item, index) => (
+                  <div key={`${item.label}-${index}`} className="flex items-center gap-2">
+                    {item.to && index < breadcrumbs.length - 1 ? (
+                      <Link className="transition hover:text-slate-800" to={item.to}>
+                        {item.label}
+                      </Link>
+                    ) : (
+                      <span className={index === breadcrumbs.length - 1 ? 'text-slate-800' : undefined}>{item.label}</span>
+                    )}
+                    {index < breadcrumbs.length - 1 ? <span className="text-slate-300">{'/'}</span> : null}
+                  </div>
+                ))}
+              </div>
+              {contextLabel ? (
+                <p className="text-sm font-semibold tracking-[-0.01em] text-slate-700">{contextLabel}</p>
+              ) : null}
+            </div>
+          </header>
 
           <main className="flex-1 px-8 py-8">
             <Outlet />

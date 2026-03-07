@@ -1,4 +1,4 @@
-import { useRef, useState, type ChangeEvent, type DragEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent, type DragEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useLabStore } from '@/app/store/use-lab-store';
 import type { DocumentAttachment } from '@/entities/models';
@@ -8,10 +8,29 @@ import { Button } from '@/shared/ui/button';
 import { Card } from '@/shared/ui/card';
 import { EmptyState } from '@/shared/ui/empty-state';
 import { Field, Input, Textarea } from '@/shared/ui/field';
+import { Modal } from '@/shared/ui/modal';
 import { PageHeader } from '@/shared/ui/page-header';
 
 const acceptedFileTypes =
   '.pdf,.hwp,.hwpx,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.csv,.txt,.zip,.png,.jpg,.jpeg';
+
+type SaveState = 'saving' | 'saved' | 'error';
+
+interface DocumentDraft {
+  title: string;
+  body: string;
+  tagsText: string;
+  attachments: DocumentAttachment[];
+  relatedTaskIds: string[];
+}
+
+const emptyDraft: DocumentDraft = {
+  title: '',
+  body: '',
+  tagsText: '',
+  attachments: [],
+  relatedTaskIds: [],
+};
 
 function formatFileSize(size: number): string {
   if (size < 1024) {
@@ -44,11 +63,19 @@ function readFileAsDataUrl(file: File): Promise<string> {
         resolve(reader.result);
         return;
       }
+
       reject(new Error('파일을 읽을 수 없습니다.'));
     };
-    reader.onerror = () => reject(reader.error ?? new Error('파일을 읽는 중 오류가 발생했습니다.'));
+    reader.onerror = () => reject(reader.error ?? new Error('파일을 불러오는 중 오류가 발생했습니다.'));
     reader.readAsDataURL(file);
   });
+}
+
+function parseTags(value: string): string[] {
+  return value
+    .split(',')
+    .map((tag) => tag.trim())
+    .filter(Boolean);
 }
 
 export function DocumentPage() {
@@ -57,18 +84,66 @@ export function DocumentPage() {
   const { currentUserId, deleteDocument, documents, tasks, updateDocument, users } = useLabStore();
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [saveState, setSaveState] = useState<SaveState>('saved');
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [draft, setDraft] = useState<DocumentDraft>(emptyDraft);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const didHydrateDraftRef = useRef(false);
 
   const document = documents.find((item) => item.id === docId && item.projectId === projectId);
-
-  if (!document || !currentUserId) {
-    return <EmptyState title="문서를 찾을 수 없습니다" description="이 프로젝트에서 요청한 문서를 찾을 수 없습니다." />;
-  }
-
-  const currentDocument = document;
-  const authorId = currentUserId;
+  const authorId = currentUserId ?? '';
   const relatedTasks = tasks.filter((task) => task.projectId === projectId);
-  const author = users.find((user) => user.id === currentDocument.authorId);
+  const author = users.find((user) => user.id === document?.authorId);
+
+  useEffect(() => {
+    if (!document) {
+      setDraft(emptyDraft);
+      setSaveState('saved');
+      didHydrateDraftRef.current = false;
+      return;
+    }
+
+    setDraft({
+      title: document.title,
+      body: document.body,
+      tagsText: document.tags.join(', '),
+      attachments: document.attachments ?? [],
+      relatedTaskIds: document.relatedTaskIds,
+    });
+    setSaveState('saved');
+    didHydrateDraftRef.current = false;
+  }, [document]);
+
+  useEffect(() => {
+    if (!document || !currentUserId) {
+      return;
+    }
+
+    if (!didHydrateDraftRef.current) {
+      didHydrateDraftRef.current = true;
+      return;
+    }
+
+    setSaveState('saving');
+    const timeoutId = window.setTimeout(() => {
+      try {
+        updateDocument(document.id, {
+          projectId: document.projectId,
+          title: draft.title,
+          body: draft.body,
+          tags: parseTags(draft.tagsText),
+          authorId,
+          relatedTaskIds: draft.relatedTaskIds,
+          attachments: draft.attachments,
+        });
+        setSaveState('saved');
+      } catch {
+        setSaveState('error');
+      }
+    }, 450);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [authorId, currentUserId, document, draft, updateDocument]);
 
   async function handleFiles(fileList: FileList | null) {
     if (!fileList || fileList.length === 0) {
@@ -81,11 +156,10 @@ export function DocumentPage() {
         Array.from(fileList).map(async (file) => createAttachment(file, await readFileAsDataUrl(file))),
       );
 
-      updateDocument(currentDocument.id, {
-        ...currentDocument,
-        attachments: [...currentDocument.attachments, ...nextAttachments],
-        authorId,
-      });
+      setDraft((current) => ({
+        ...current,
+        attachments: [...current.attachments, ...nextAttachments],
+      }));
     } finally {
       setIsUploading(false);
       if (fileInputRef.current) {
@@ -105,26 +179,35 @@ export function DocumentPage() {
   }
 
   function removeAttachment(attachmentId: string) {
-    updateDocument(currentDocument.id, {
-      ...currentDocument,
-      attachments: currentDocument.attachments.filter((attachment) => attachment.id !== attachmentId),
-      authorId,
-    });
+    setDraft((current) => ({
+      ...current,
+      attachments: current.attachments.filter((attachment) => attachment.id !== attachmentId),
+    }));
   }
+
+  function toggleRelatedTask(taskId: string) {
+    setDraft((current) => ({
+      ...current,
+      relatedTaskIds: current.relatedTaskIds.includes(taskId)
+        ? current.relatedTaskIds.filter((id) => id !== taskId)
+        : [...current.relatedTaskIds, taskId],
+    }));
+  }
+
+  if (!document || !currentUserId) {
+    return <EmptyState title="문서를 찾을 수 없습니다" description="현재 프로젝트에서 요청한 문서를 찾을 수 없습니다." />;
+  }
+
+  const saveStateLabel = saveState === 'saving' ? '저장 중...' : saveState === 'error' ? '저장 실패' : '저장됨';
 
   return (
     <div className="space-y-8">
       <PageHeader
-        title={currentDocument.title}
+        title={draft.title || '문서'}
         actions={
-          <>
-            <Button variant="secondary" onClick={() => updateDocument(currentDocument.id, { ...currentDocument, authorId })}>
-              변경 저장
-            </Button>
-            <Button variant="ghost" onClick={() => { deleteDocument(currentDocument.id); navigate(`/projects/${projectId}`); }}>
-              문서 삭제
-            </Button>
-          </>
+          <div className="rounded-full border border-slate-200 bg-white/90 px-3 py-2 text-sm font-medium text-slate-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]">
+            자동 저장 {saveStateLabel}
+          </div>
         }
       />
 
@@ -133,26 +216,21 @@ export function DocumentPage() {
           <div className="grid gap-5">
             <Field label="문서 제목">
               <Input
-                value={currentDocument.title}
-                onChange={(event) => updateDocument(currentDocument.id, { ...currentDocument, title: event.target.value, authorId })}
+                value={draft.title}
+                onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))}
               />
             </Field>
             <Field label="문서 본문">
               <Textarea
                 className="min-h-[360px]"
-                value={currentDocument.body}
-                onChange={(event) => updateDocument(currentDocument.id, { ...currentDocument, body: event.target.value, authorId })}
+                value={draft.body}
+                onChange={(event) => setDraft((current) => ({ ...current, body: event.target.value }))}
               />
             </Field>
             <Field label="태그">
               <Input
-                value={currentDocument.tags.join(', ')}
-                onChange={(event) =>
-                  updateDocument(currentDocument.id, {
-                    ...currentDocument,
-                    tags: event.target.value.split(',').map((tag) => tag.trim()).filter(Boolean),
-                    authorId,
-                  })}
+                value={draft.tagsText}
+                onChange={(event) => setDraft((current) => ({ ...current, tagsText: event.target.value }))}
               />
             </Field>
           </div>
@@ -162,11 +240,13 @@ export function DocumentPage() {
           <Card className="border-slate-200/70">
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">메타데이터</p>
             <div className="mt-5 space-y-4 text-sm text-slate-600">
-              <p>작성자 {author?.name ?? '알 수 없음'}</p>
-              <p>수정일 {formatDateTime(currentDocument.updatedAt)}</p>
+              <p>작성자 {author?.name ?? '정보 없음'}</p>
+              <p>최근 저장 {formatDateTime(document.updatedAt)}</p>
               <div className="flex flex-wrap gap-2">
-                {currentDocument.tags.map((tag) => (
-                  <Badge key={tag} tone="info">{tag}</Badge>
+                {parseTags(draft.tagsText).map((tag) => (
+                  <Badge key={tag} tone="info">
+                    {tag}
+                  </Badge>
                 ))}
               </div>
             </div>
@@ -221,14 +301,12 @@ export function DocumentPage() {
               <p className="mt-2 text-sm leading-6 text-slate-500">
                 로컬 파일을 바로 끌어오거나 클릭해서 선택할 수 있습니다.
               </p>
-              {isUploading ? (
-                <p className="mt-3 text-sm font-medium text-accent-700">업로드 중...</p>
-              ) : null}
+              {isUploading ? <p className="mt-3 text-sm font-medium text-accent-700">파일 업로드 중...</p> : null}
             </button>
 
             <div className="mt-5 grid gap-3">
-              {currentDocument.attachments.length > 0 ? (
-                currentDocument.attachments.map((attachment) => (
+              {draft.attachments.length > 0 ? (
+                draft.attachments.map((attachment) => (
                   <div key={attachment.id} className="rounded-[20px] border border-slate-200/80 bg-slate-50/70 p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
@@ -281,15 +359,13 @@ export function DocumentPage() {
             </div>
             <div className="mt-5 grid gap-3">
               {relatedTasks.map((task) => (
-                <label key={task.id} className="flex items-start gap-3 rounded-[20px] border border-slate-200/80 bg-slate-50/70 p-4">
+                <label
+                  key={task.id}
+                  className="flex items-start gap-3 rounded-[20px] border border-slate-200/80 bg-slate-50/70 p-4"
+                >
                   <input
-                    checked={currentDocument.relatedTaskIds.includes(task.id)}
-                    onChange={() => {
-                      const nextIds = currentDocument.relatedTaskIds.includes(task.id)
-                        ? currentDocument.relatedTaskIds.filter((id) => id !== task.id)
-                        : [...currentDocument.relatedTaskIds, task.id];
-                      updateDocument(currentDocument.id, { ...currentDocument, relatedTaskIds: nextIds, authorId });
-                    }}
+                    checked={draft.relatedTaskIds.includes(task.id)}
+                    onChange={() => toggleRelatedTask(task.id)}
                     type="checkbox"
                   />
                   <div>
@@ -300,8 +376,45 @@ export function DocumentPage() {
               ))}
             </div>
           </Card>
+
+          <Card className="border-rose-200/70 bg-rose-50/65">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-rose-400">위험 작업</p>
+            <h2 className="mt-2 text-[20px] font-semibold tracking-[-0.02em] text-slate-950">문서 삭제</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-500">
+              문서를 삭제하면 연결된 작업 참조도 함께 해제됩니다.
+            </p>
+            <Button className="mt-4" variant="danger" onClick={() => setShowDeleteModal(true)}>
+              문서 삭제
+            </Button>
+          </Card>
         </div>
       </div>
+
+      <Modal
+        open={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        title="문서 삭제"
+        footer={
+          <div className="flex justify-end gap-3">
+            <Button variant="secondary" onClick={() => setShowDeleteModal(false)}>
+              취소
+            </Button>
+            <Button
+              variant="danger"
+              onClick={() => {
+                deleteDocument(document.id);
+                navigate(`/projects/${projectId}/docs`);
+              }}
+            >
+              삭제
+            </Button>
+          </div>
+        }
+      >
+        <p className="text-sm leading-6 text-slate-600">
+          <span className="font-semibold text-slate-900">{document.title}</span> 문서를 정말 삭제하시겠습니까?
+        </p>
+      </Modal>
     </div>
   );
 }

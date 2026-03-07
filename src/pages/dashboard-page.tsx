@@ -1,9 +1,14 @@
 import { Link } from 'react-router-dom';
 import { useLabStore } from '@/app/store/use-lab-store';
-import type { Schedule, Task, TimetableBlock, Weekday } from '@/entities/models';
-import { projectStatusLabels, taskPriorityLabels, taskStatusLabels, weekdayLabels } from '@/shared/lib/labels';
+import type { Project, Schedule, Task, TimetableBlock, Weekday } from '@/entities/models';
+import {
+  projectStatusLabels,
+  taskPriorityLabels,
+  taskStatusLabels,
+  weekdayLabels,
+} from '@/shared/lib/labels';
 import type { BadgeTone } from '@/shared/ui/badge';
-import { compareWeekday, formatDate, formatShortDate } from '@/shared/lib/date';
+import { compareWeekday, formatDate, formatShortDate, startOfDay } from '@/shared/lib/date';
 import { Badge } from '@/shared/ui/badge';
 import { Button } from '@/shared/ui/button';
 import { Card } from '@/shared/ui/card';
@@ -24,19 +29,21 @@ interface RiskItem {
   title: string;
   label: string;
   tone: BadgeTone;
+  reason: string;
   detail: string;
   projectId?: string;
 }
 
-function startOfDay(date: Date): Date {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+interface WorkSignal {
+  label: string;
+  tone: BadgeTone;
 }
 
 function parseDueDate(value: string): Date {
   return new Date(`${value}T09:00:00`);
 }
 
-function daysFromReference(value: string, referenceDate: Date): number {
+function daysFromToday(value: string, referenceDate: Date): number {
   const diff = startOfDay(parseDueDate(value)).getTime() - referenceDate.getTime();
   return Math.floor(diff / DAY_IN_MS);
 }
@@ -74,30 +81,33 @@ function buildScheduleDiagnostic(schedule: Schedule, blocks: TimetableBlock[]): 
     return {
       schedule,
       tone: 'danger',
-      label: '가용 시간 외',
-      detail: hardConflictBlock.category === 'Class' ? '수업 일정과 겹침' : '참여 불가로 표시된 시간',
+      label: 'Coordination issue',
+      detail:
+        hardConflictBlock.category === 'Class'
+          ? 'Class time overlaps this shared session.'
+          : 'Session lands inside a blocked availability window.',
       isConflict: true,
     };
   }
 
   if (availabilityBlocks.length > 0) {
-    const fullyAvailable = availabilityBlocks.some((block) => fullyContains(block, schedule));
-    if (fullyAvailable) {
+    if (availabilityBlocks.some((block) => fullyContains(block, schedule))) {
       return {
         schedule,
         tone: 'success',
-        label: '가용 시간 내',
-        detail: '등록된 실험실 가능 시간 안에 있음',
+        label: 'Covered',
+        detail: 'Shared session fits inside your registered lab availability.',
         isConflict: false,
       };
     }
 
-    const partialAvailability = availabilityBlocks.some((block) => overlaps(block, schedule));
     return {
       schedule,
       tone: 'warning',
-      label: partialAvailability ? '부분 겹침' : '가용 시간 외',
-      detail: partialAvailability ? '가능 시간 범위를 일부 넘김' : '연결되는 가능 시간 블록 없음',
+      label: 'Availability mismatch',
+      detail: availabilityBlocks.some((block) => overlaps(block, schedule))
+        ? 'Session only partially overlaps your available window.'
+        : 'No registered availability covers this shared session.',
       isConflict: true,
     };
   }
@@ -105,34 +115,17 @@ function buildScheduleDiagnostic(schedule: Schedule, blocks: TimetableBlock[]): 
   return {
     schedule,
     tone: 'neutral',
-    label: '가용 시간 미등록',
-    detail: '개인 가능 시간이 아직 등록되지 않음',
+    label: 'No availability',
+    detail: 'No personal availability has been registered for this session yet.',
     isConflict: false,
   };
 }
 
-function getReferenceDate(tasks: Task[]): Date {
-  const openTaskTimes = tasks
-    .filter((task) => task.status !== 'Done')
-    .map((task) => parseDueDate(task.dueDate).getTime())
-    .sort((left, right) => left - right);
-
-  if (openTaskTimes.length === 0) {
-    return startOfDay(new Date());
-  }
-
-  return new Date(openTaskTimes[0] - DAY_IN_MS);
-}
-
-function getWeekdayLabel(day: Weekday, start: string, end: string): string {
+function getWeekdayTimeLabel(day: Weekday, start: string, end: string): string {
   return `${weekdayLabels[day]} ${start} - ${end}`;
 }
 
-function compactCountText(count: number, singular: string, plural: string): string {
-  return `${count}${count === 1 ? singular : plural}`;
-}
-
-function taskPriorityTone(task: Task): BadgeTone {
+function getTaskPriorityTone(task: Task): BadgeTone {
   if (task.priority === 'Urgent') {
     return 'danger';
   }
@@ -144,18 +137,76 @@ function taskPriorityTone(task: Task): BadgeTone {
   return 'neutral';
 }
 
-export function DashboardPage() {
-  const {
-    currentUserId,
-    documents,
-    projects,
-    schedules,
-    tasks,
-    timetableBlocks,
-    updateTaskStatus,
-  } = useLabStore();
+function getProjectTone(project: Project): BadgeTone {
+  if (project.status === 'Active') {
+    return 'success';
+  }
 
-  const referenceDate = getReferenceDate(tasks);
+  if (project.status === 'Planning') {
+    return 'warning';
+  }
+
+  return 'neutral';
+}
+
+function buildDueLabel(task: Task, referenceDate: Date): string {
+  const days = daysFromToday(task.dueDate, referenceDate);
+
+  if (days < 0) {
+    return `${Math.abs(days)}d overdue`;
+  }
+
+  if (days === 0) {
+    return 'Due today';
+  }
+
+  if (days === 1) {
+    return 'Due tomorrow';
+  }
+
+  if (days <= 6) {
+    return `Due in ${days}d`;
+  }
+
+  return formatDate(task.dueDate);
+}
+
+function buildWorkSignals(
+  task: Task,
+  referenceDate: Date,
+  projectHasScheduleRisk: boolean,
+  needsAdvisorCheck: boolean,
+): WorkSignal[] {
+  const days = daysFromToday(task.dueDate, referenceDate);
+  const signals: WorkSignal[] = [];
+
+  if (days < 0) {
+    signals.push({ label: 'Overdue', tone: 'danger' });
+  } else if (days <= 1) {
+    signals.push({ label: 'Due soon', tone: 'warning' });
+  } else if (days <= 6) {
+    signals.push({ label: 'Due this week', tone: 'info' });
+  }
+
+  if (task.status === 'Review') {
+    signals.push({ label: 'Waiting review', tone: 'warning' });
+  }
+
+  if (needsAdvisorCheck) {
+    signals.push({ label: 'Advisor check', tone: 'warning' });
+  }
+
+  if (projectHasScheduleRisk) {
+    signals.push({ label: 'Schedule-sensitive', tone: 'danger' });
+  }
+
+  return signals.slice(0, 3);
+}
+
+export function DashboardPage() {
+  const { currentUserId, documents, projects, schedules, tasks, timetableBlocks, updateTaskStatus } = useLabStore();
+
+  const referenceDate = startOfDay(new Date());
   const myProjects = projects.filter((project) => project.memberIds.includes(currentUserId ?? ''));
   const myProjectIds = new Set(myProjects.map((project) => project.id));
   const myTasks = tasks.filter((task) => task.assigneeId === currentUserId && task.status !== 'Done');
@@ -163,10 +214,6 @@ export function DashboardPage() {
   const myTimetableBlocks = timetableBlocks
     .filter((block) => block.userId === currentUserId)
     .sort((left, right) => compareWeekday(left.day, right.day));
-  const recentDocs = documents
-    .filter((document) => myProjectIds.has(document.projectId))
-    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
-    .slice(0, 3);
 
   const sharedSchedules = schedules
     .filter(
@@ -179,32 +226,134 @@ export function DashboardPage() {
         compareWeekday(left.day, right.day) || left.startTime.localeCompare(right.startTime),
     );
 
-  const personalSchedules = schedules
-    .filter((schedule) => schedule.type === 'Personal' && schedule.ownerId === currentUserId)
-    .sort(
-      (left, right) =>
-        compareWeekday(left.day, right.day) || left.startTime.localeCompare(right.startTime),
-    );
-
-  const overdueTasks = myTasks.filter((task) => daysFromReference(task.dueDate, referenceDate) < 0);
-  const dueSoonTasks = myTasks.filter((task) => {
-    const delta = daysFromReference(task.dueDate, referenceDate);
-    return delta >= 0 && delta <= 2;
-  });
-  const dueThisWeekTasks = myTasks.filter((task) => {
-    const delta = daysFromReference(task.dueDate, referenceDate);
-    return delta >= 0 && delta <= 6;
-  });
-  const pendingReviewTasks = myTasks.filter((task) => task.status === 'Review');
-  const unresolvedItems = myProjectTasks.filter(
-    (task) => task.status === 'Review' || task.title.toLowerCase().includes('review'),
-  );
-  const unassignedTasks = myProjectTasks.filter((task) => !task.assigneeId);
-
   const scheduleDiagnostics = sharedSchedules.map((schedule) =>
     buildScheduleDiagnostic(schedule, myTimetableBlocks),
   );
   const scheduleConflicts = scheduleDiagnostics.filter((item) => item.isConflict);
+
+  const overdueTasks = myTasks.filter((task) => daysFromToday(task.dueDate, referenceDate) < 0);
+  const dueThisWeekTasks = myTasks.filter((task) => {
+    const delta = daysFromToday(task.dueDate, referenceDate);
+    return delta >= 0 && delta <= 6;
+  });
+  const reviewTasks = myProjectTasks.filter((task) => task.status === 'Review');
+  const advisorCheckTasks = myProjectTasks.filter(
+    (task) => task.status !== 'Review' && task.title.toLowerCase().includes('review'),
+  );
+  const blockedTasks = myProjectTasks.filter((task) => !task.assigneeId);
+
+  const workQueue = [...myTasks].sort((left, right) => {
+    const leftDays = daysFromToday(left.dueDate, referenceDate);
+    const rightDays = daysFromToday(right.dueDate, referenceDate);
+    const leftScore =
+      (left.status === 'Review' ? 70 : 0) +
+      (left.priority === 'Urgent' ? 45 : left.priority === 'High' ? 25 : 0) +
+      (leftDays < 0 ? 40 : leftDays <= 1 ? 32 : leftDays <= 6 ? 18 : 0);
+    const rightScore =
+      (right.status === 'Review' ? 70 : 0) +
+      (right.priority === 'Urgent' ? 45 : right.priority === 'High' ? 25 : 0) +
+      (rightDays < 0 ? 40 : rightDays <= 1 ? 32 : rightDays <= 6 ? 18 : 0);
+
+    return rightScore - leftScore || leftDays - rightDays;
+  });
+
+  const riskItems: RiskItem[] = [
+    ...overdueTasks.map((task) => ({
+      id: `overdue-${task.id}`,
+      title: task.title,
+      label: 'Overdue',
+      tone: 'danger' as BadgeTone,
+      reason: 'Due date passed',
+      detail: `${formatDate(task.dueDate)} deadline has already passed.`,
+      projectId: task.projectId,
+    })),
+    ...dueThisWeekTasks
+      .filter((task) => daysFromToday(task.dueDate, referenceDate) <= 1)
+      .filter((task) => !overdueTasks.some((item) => item.id === task.id))
+      .map((task) => ({
+        id: `soon-${task.id}`,
+        title: task.title,
+        label: 'Due soon',
+        tone: 'warning' as BadgeTone,
+        reason: 'Within 24h',
+        detail: `Due ${buildDueLabel(task, referenceDate).toLowerCase()}.`,
+        projectId: task.projectId,
+      })),
+    ...reviewTasks.map((task) => ({
+      id: `review-${task.id}`,
+      title: task.title,
+      label: 'Review waiting',
+      tone: 'warning' as BadgeTone,
+      reason: 'Pending advisor review',
+      detail: 'Work is complete enough to review but still waiting on a decision.',
+      projectId: task.projectId,
+    })),
+    ...advisorCheckTasks.map((task) => ({
+      id: `advisor-${task.id}`,
+      title: task.title,
+      label: 'Advisor check',
+      tone: 'warning' as BadgeTone,
+      reason: 'Handoff incomplete',
+      detail: 'Task wording indicates a review handoff, but it is not yet in review.',
+      projectId: task.projectId,
+    })),
+    ...scheduleConflicts.map((item) => ({
+      id: `schedule-${item.schedule.id}`,
+      title: item.schedule.title,
+      label: item.label,
+      tone: item.tone,
+      reason:
+        item.label === 'Availability mismatch'
+          ? 'Outside registered availability'
+          : 'Unresolved schedule issue',
+      detail: item.detail,
+      projectId: item.schedule.projectId,
+    })),
+    ...blockedTasks.map((task) => ({
+      id: `blocked-${task.id}`,
+      title: task.title,
+      label: 'Blocked',
+      tone: 'warning' as BadgeTone,
+      reason: 'No assignee',
+      detail: 'Task has no owner, so the handoff is still incomplete.',
+      projectId: task.projectId,
+    })),
+  ]
+    .slice(0, 6);
+
+  const projectWatchlist = myProjects
+    .map((project) => {
+      const projectTasks = myProjectTasks.filter((task) => task.projectId === project.id);
+      const overdue = projectTasks.filter((task) => daysFromToday(task.dueDate, referenceDate) < 0).length;
+      const dueThisWeek = projectTasks.filter((task) => {
+        const delta = daysFromToday(task.dueDate, referenceDate);
+        return delta >= 0 && delta <= 6;
+      }).length;
+      const reviewWaiting = projectTasks.filter((task) => task.status === 'Review').length;
+      const blocked = projectTasks.filter((task) => !task.assigneeId).length;
+      const nextSession = schedules
+        .filter((schedule) => schedule.projectId === project.id)
+        .sort(
+          (left, right) =>
+            compareWeekday(left.day, right.day) || left.startTime.localeCompare(right.startTime),
+        )[0];
+      const coordinationIssues = scheduleConflicts.filter((item) => item.schedule.projectId === project.id).length;
+      const score = overdue * 4 + dueThisWeek * 2 + reviewWaiting * 2 + blocked * 3 + coordinationIssues * 3;
+
+      return {
+        project,
+        overdue,
+        dueThisWeek,
+        reviewWaiting,
+        blocked,
+        nextSession,
+        coordinationIssues,
+        score,
+      };
+    })
+    .filter((item) => item.score > 0 || item.nextSession)
+    .sort((left, right) => right.score - left.score)
+    .slice(0, 4);
 
   const bestCollaborationWindow = myTimetableBlocks
     .filter((block) => block.category === 'Lab Availability')
@@ -216,288 +365,163 @@ export function DashboardPage() {
         compareWeekday(left.day, right.day),
     )[0];
 
-  const workQueue = [...myTasks].sort((left, right) => {
-    const leftDays = daysFromReference(left.dueDate, referenceDate);
-    const rightDays = daysFromReference(right.dueDate, referenceDate);
-    const leftScore =
-      (left.status === 'Review' ? 50 : 0) +
-      (left.priority === 'Urgent' ? 40 : left.priority === 'High' ? 25 : 0) +
-      (leftDays < 0 ? 35 : leftDays <= 2 ? 30 : leftDays <= 6 ? 20 : 0);
-    const rightScore =
-      (right.status === 'Review' ? 50 : 0) +
-      (right.priority === 'Urgent' ? 40 : right.priority === 'High' ? 25 : 0) +
-      (rightDays < 0 ? 35 : rightDays <= 2 ? 30 : rightDays <= 6 ? 20 : 0);
-
-    return rightScore - leftScore || leftDays - rightDays;
-  });
-
-  const riskItems: RiskItem[] = [
-    ...overdueTasks.map((task) => ({
-      id: `overdue-${task.id}`,
-      title: task.title,
-      label: '기한 초과',
-      tone: 'danger' as BadgeTone,
-      detail: `${formatDate(task.dueDate)}부터 지연`,
-      projectId: task.projectId,
-    })),
-    ...dueSoonTasks
-      .filter((task) => !overdueTasks.some((overdueTask) => overdueTask.id === task.id))
-      .map((task) => ({
-        id: `soon-${task.id}`,
-        title: task.title,
-        label: '마감 임박',
-        tone: 'warning' as BadgeTone,
-        detail: `${formatDate(task.dueDate)} 전까지 진행 필요`,
-        projectId: task.projectId,
-      })),
-    ...unresolvedItems
-      .filter((task) => !dueSoonTasks.some((dueSoonTask) => dueSoonTask.id === task.id))
-      .map((task) => ({
-        id: `handoff-${task.id}`,
-        title: task.title,
-        label: task.status === 'Review' ? '검토 대기' : '인수인계 지연',
-        tone: 'warning' as BadgeTone,
-        detail: task.status === 'Review' ? '승인 대기 중' : '검토 의존성이 아직 해결되지 않음',
-        projectId: task.projectId,
-      })),
-    ...scheduleConflicts.map((item) => ({
-      id: `schedule-${item.schedule.id}`,
-      title: item.schedule.title,
-      label: item.label,
-      tone: item.tone,
-      detail: item.detail,
-      projectId: item.schedule.projectId,
-    })),
-    ...unassignedTasks.map((task) => ({
-      id: `unassigned-${task.id}`,
-      title: task.title,
-      label: '담당자 없음',
-      tone: 'warning' as BadgeTone,
-      detail: '작업 소유자가 아직 지정되지 않음',
-      projectId: task.projectId,
-    })),
-  ].slice(0, 5);
-
-  const projectWatchlist = myProjects
-    .map((project) => {
-      const projectTasksForWatch = myProjectTasks.filter((task) => task.projectId === project.id);
-      const projectDueThisWeek = projectTasksForWatch.filter((task) => {
-        const delta = daysFromReference(task.dueDate, referenceDate);
-        return delta >= 0 && delta <= 6;
-      });
-      const projectReview = projectTasksForWatch.filter((task) => task.status === 'Review');
-      const projectScheduleIssues = scheduleConflicts.filter((item) => item.schedule.projectId === project.id);
-      const score =
-        projectDueThisWeek.length * 2 + projectReview.length * 2 + projectScheduleIssues.length * 3;
-
-      return {
-        project,
-        score,
-        reasons: [
-          projectDueThisWeek.length > 0
-            ? compactCountText(projectDueThisWeek.length, '건 이번 주 마감', '건 이번 주 마감')
-            : null,
-          projectReview.length > 0
-            ? compactCountText(projectReview.length, '건 검토 대기', '건 검토 대기')
-            : null,
-          projectScheduleIssues.length > 0
-            ? compactCountText(projectScheduleIssues.length, '건 일정 이슈 미해결', '건 일정 이슈 미해결')
-            : null,
-        ].filter(Boolean),
-      };
-    })
-    .filter((item) => item.score > 0)
-    .sort((left, right) => right.score - left.score)
+  const recentDocs = documents
+    .filter((document) => myProjectIds.has(document.projectId))
+    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
     .slice(0, 3);
 
-  const weeklySummary = `${compactCountText(
-    dueSoonTasks.length,
-    '건의 작업이 72시간 내 마감',
-    '건의 작업이 72시간 내 마감',
-  )}, ${compactCountText(
-    scheduleConflicts.length,
-    '건의 일정 불일치',
-    '건의 일정 불일치',
-  )}, ${compactCountText(
-    unresolvedItems.length,
-    '건의 인수인계 대기',
-    '건의 인수인계 대기',
-  )}가 확인이 필요합니다.`;
-
-  const followupSummary = bestCollaborationWindow
-    ? `가장 넓은 공용 연구실 시간은 ${getWeekdayLabel(
-        bestCollaborationWindow.day,
-        bestCollaborationWindow.startTime,
-        bestCollaborationWindow.endTime,
-      )}입니다.`
-    : '등록된 연구실 가능 시간 블록이 아직 없습니다.';
-
   return (
-    <div className="space-y-8">
-      <PageHeader title="대시보드" />
+    <div className="space-y-6">
+      <PageHeader
+        title="Dashboard"
+        description="This week: focus on urgent work, review waiting, and coordination mismatches."
+      />
 
-      <Card className="overflow-hidden border-slate-200/70 bg-[linear-gradient(135deg,rgba(255,255,255,0.97),rgba(245,247,252,0.94))] py-5">
-        <div className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
+      <Card className="overflow-hidden border-slate-200/70 bg-[linear-gradient(135deg,rgba(255,255,255,0.97),rgba(245,247,252,0.94))]">
+        <div className="grid gap-4 lg:grid-cols-[1.35fr_0.65fr]">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-              주간 운영 브리프
+              Weekly operations
             </p>
-            <h2 className="mt-2 text-[26px] font-semibold tracking-[-0.04em] text-slate-950">
-              {weeklySummary}
+            <h2 className="mt-2 text-[28px] font-semibold tracking-[-0.04em] text-slate-950">
+              {overdueTasks.length > 0
+                ? `${overdueTasks.length} overdue, ${dueThisWeekTasks.length} due this week`
+                : `${dueThisWeekTasks.length} due this week, ${reviewTasks.length} waiting review`}
             </h2>
-            <p className="mt-3 text-sm leading-6 text-slate-500">{followupSummary}</p>
+            <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-500">
+              Coordination risk is driven by {scheduleConflicts.length} shared session issues and{' '}
+              {blockedTasks.length} unassigned work items.
+            </p>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-2">
             <div className="rounded-[20px] border border-white/80 bg-white/92 px-4 py-3.5">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-                마감 임박
+                Urgent work
               </p>
               <p className="mt-1.5 text-[28px] font-semibold tracking-[-0.04em] text-slate-950">
-                {dueSoonTasks.length}
+                {overdueTasks.length + myTasks.filter((task) => task.priority === 'Urgent').length}
               </p>
             </div>
             <div className="rounded-[20px] border border-white/80 bg-white/92 px-4 py-3.5">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-                일정 충돌
+                Due this week
+              </p>
+              <p className="mt-1.5 text-[28px] font-semibold tracking-[-0.04em] text-slate-950">
+                {dueThisWeekTasks.length}
+              </p>
+            </div>
+            <div className="rounded-[20px] border border-white/80 bg-white/92 px-4 py-3.5">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                Review waiting
+              </p>
+              <p className="mt-1.5 text-[28px] font-semibold tracking-[-0.04em] text-slate-950">
+                {reviewTasks.length}
+              </p>
+            </div>
+            <div className="rounded-[20px] border border-white/80 bg-white/92 px-4 py-3.5">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                Coordination risk
               </p>
               <p className="mt-1.5 text-[28px] font-semibold tracking-[-0.04em] text-slate-950">
                 {scheduleConflicts.length}
-              </p>
-            </div>
-            <div className="rounded-[20px] border border-white/80 bg-white/92 px-4 py-3.5">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-                대기 항목
-              </p>
-              <p className="mt-1.5 text-[28px] font-semibold tracking-[-0.04em] text-slate-950">
-                {unresolvedItems.length}
               </p>
             </div>
           </div>
         </div>
       </Card>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <Card className="border-slate-200/70 p-5">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-            내 담당 작업
-          </p>
-          <p className="mt-2 text-[32px] font-semibold tracking-[-0.05em] text-slate-950">
-            {myTasks.length}
-          </p>
-          <p className="mt-1.5 text-sm text-slate-500">
-            {compactCountText(myTasks.length, '건의 열린 작업이 내 큐에 있습니다', '건의 열린 작업이 내 큐에 있습니다')}
-          </p>
-        </Card>
-
-        <Card className="border-slate-200/70 p-5">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-            이번 주 마감
-          </p>
-          <p className="mt-2 text-[32px] font-semibold tracking-[-0.05em] text-slate-950">
-            {dueThisWeekTasks.length}
-          </p>
-          <p className="mt-1.5 text-sm text-slate-500">
-            {compactCountText(dueThisWeekTasks.length, '건이 이번 주 마감입니다', '건이 이번 주 마감입니다')}
-          </p>
-        </Card>
-
-        <Card className="border-amber-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(255,249,240,0.92))] p-5">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-500">
-            일정 충돌
-          </p>
-          <p className="mt-2 text-[32px] font-semibold tracking-[-0.05em] text-slate-950">
-            {scheduleConflicts.length}
-          </p>
-          <p className="mt-1.5 text-sm text-slate-500">
-            {compactCountText(scheduleConflicts.length, '건의 일정 불일치가 감지되었습니다', '건의 일정 불일치가 감지되었습니다')}
-          </p>
-        </Card>
-
-        <Card className="border-slate-200/70 p-5">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-            검토 대기
-          </p>
-          <p className="mt-2 text-[32px] font-semibold tracking-[-0.05em] text-slate-950">
-            {pendingReviewTasks.length}
-          </p>
-          <p className="mt-1.5 text-sm text-slate-500">
-            {compactCountText(pendingReviewTasks.length, '건이 인수인계 대기 중입니다', '건이 인수인계 대기 중입니다')}
-          </p>
-        </Card>
-      </div>
-
-      <div className="grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
+      <div className="grid gap-6 xl:grid-cols-[1.45fr_0.85fr]">
         <Card className="border-slate-200/70">
-          <div className="flex items-center justify-between">
-            <h2 className="text-[24px] font-semibold tracking-[-0.03em] text-slate-950">
-              내 작업 큐
-            </h2>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                Action zone
+              </p>
+              <h2 className="mt-1.5 text-[24px] font-semibold tracking-[-0.03em] text-slate-950">
+                My work queue
+              </h2>
+            </div>
             <Link className="text-sm font-semibold text-accent-700" to="/projects">
-              프로젝트 보기
+              Open projects
             </Link>
           </div>
 
           <div className="mt-5 grid gap-3">
-            {workQueue.map((task) => {
-              const project = projects.find((projectItem) => projectItem.id === task.projectId);
-              const linkedDoc = documents.find((document) => document.id === task.documentId);
-              const projectScheduleRisk = scheduleConflicts.some(
+            {workQueue.slice(0, 6).map((task) => {
+              const project = projects.find((item) => item.id === task.projectId);
+              const linkedDoc = documents.find((item) => item.id === task.documentId);
+              const needsAdvisorCheck =
+                task.status !== 'Review' && task.title.toLowerCase().includes('review');
+              const projectHasScheduleRisk = scheduleConflicts.some(
                 (item) => item.schedule.projectId === task.projectId,
               );
-              const needsReview = task.status === 'Review';
-              const needsAdvisorCheck = !needsReview && task.title.toLowerCase().includes('review');
+              const signals = buildWorkSignals(
+                task,
+                referenceDate,
+                projectHasScheduleRisk,
+                needsAdvisorCheck,
+              );
 
               return (
                 <div
                   key={task.id}
-                  className="rounded-[20px] border border-slate-200/80 bg-slate-50/80 px-4 py-3.5 transition hover:border-slate-300 hover:bg-white"
+                  className="rounded-[20px] border border-slate-200/80 bg-slate-50/80 px-4 py-4 transition hover:border-slate-300 hover:bg-white"
                 >
                   <div className="flex flex-wrap items-center gap-2">
-                    <Badge tone={taskPriorityTone(task)}>{taskPriorityLabels[task.priority]}</Badge>
+                    <Badge tone={getTaskPriorityTone(task)}>{taskPriorityLabels[task.priority]}</Badge>
                     <Badge tone="info">{taskStatusLabels[task.status]}</Badge>
-                    {linkedDoc ? <Badge tone="neutral">연결 문서</Badge> : null}
-                    {needsReview ? <Badge tone="warning">검토 대기</Badge> : null}
-                    {needsAdvisorCheck ? <Badge tone="warning">인수인계 지연</Badge> : null}
-                    {projectScheduleRisk ? <Badge tone="warning">가용 시간 외</Badge> : null}
+                    {signals.map((signal) => (
+                      <Badge key={`${task.id}-${signal.label}`} tone={signal.tone}>
+                        {signal.label}
+                      </Badge>
+                    ))}
                   </div>
 
                   <div className="mt-3 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                    <div>
+                    <div className="min-w-0">
                       <h3 className="text-[15px] font-semibold tracking-[-0.02em] text-slate-900">
                         {task.title}
                       </h3>
                       <p className="mt-1 text-sm text-slate-500">
-                        {project?.title ?? '알 수 없는 프로젝트'}
+                        {project?.title ?? 'Unknown project'}
                       </p>
-                      <p className="mt-2 text-sm text-slate-500">마감 {formatDate(task.dueDate)}</p>
-                      {linkedDoc ? (
-                        <p className="mt-1 text-sm text-slate-500">{linkedDoc.title}</p>
-                      ) : null}
+                      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-500">
+                        <span>{buildDueLabel(task, referenceDate)}</span>
+                        {linkedDoc ? <span>Linked doc: {linkedDoc.title}</span> : null}
+                      </div>
                     </div>
 
                     <div className="flex flex-wrap gap-2 lg:justify-end">
-                      <Button
-                        variant="ghost"
-                        className="px-3 py-1.5 text-xs text-slate-700"
-                        onClick={() => updateTaskStatus(task.id, 'Done')}
-                      >
-                        완료 처리
-                      </Button>
-                      {task.status === 'Todo' || task.status === 'In Progress' ? (
+                      {linkedDoc ? (
+                        <Link
+                          className="inline-flex items-center justify-center rounded-[14px] border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+                          to={`/projects/${task.projectId}/docs/${linkedDoc.id}`}
+                        >
+                          Open doc
+                        </Link>
+                      ) : null}
+                      {(task.status === 'Todo' || task.status === 'In Progress') ? (
                         <Button
                           variant="ghost"
                           className="px-3 py-1.5 text-xs text-slate-700"
                           onClick={() => updateTaskStatus(task.id, 'Review')}
                         >
-                          검토로 이동
+                          Move to review
                         </Button>
                       ) : null}
+                      <Button
+                        variant="ghost"
+                        className="px-3 py-1.5 text-xs text-slate-700"
+                        onClick={() => updateTaskStatus(task.id, 'Done')}
+                      >
+                        Mark done
+                      </Button>
                       <Link
                         className="inline-flex items-center justify-center rounded-[14px] border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
                         to={`/projects/${task.projectId}`}
                       >
-                        프로젝트 열기
+                        Open project
                       </Link>
                     </div>
                   </div>
@@ -508,11 +532,16 @@ export function DashboardPage() {
         </Card>
 
         <Card className="border-rose-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(255,246,247,0.93))]">
-          <div className="flex items-center justify-between">
-            <h2 className="text-[24px] font-semibold tracking-[-0.03em] text-slate-950">
-              운영 리스크
-            </h2>
-            <Badge tone="danger">주의</Badge>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                Watch panel
+              </p>
+              <h2 className="mt-1.5 text-[24px] font-semibold tracking-[-0.03em] text-slate-950">
+                Needs attention
+              </h2>
+            </div>
+            <Badge tone="danger">Watch</Badge>
           </div>
 
           <div className="mt-5 space-y-3">
@@ -523,6 +552,9 @@ export function DashboardPage() {
                     <p className="text-[15px] font-semibold tracking-[-0.02em] text-slate-900">
                       {item.title}
                     </p>
+                    <p className="mt-1.5 text-[12px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+                      {item.reason}
+                    </p>
                     <p className="mt-1.5 text-sm text-slate-500">{item.detail}</p>
                   </div>
                   <Badge tone={item.tone}>{item.label}</Badge>
@@ -532,7 +564,7 @@ export function DashboardPage() {
                     className="mt-2 inline-flex text-[11px] font-semibold uppercase tracking-[0.14em] text-accent-700"
                     to={`/projects/${item.projectId}`}
                   >
-                    프로젝트 열기
+                    Open project
                   </Link>
                 ) : null}
               </div>
@@ -541,26 +573,26 @@ export function DashboardPage() {
         </Card>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
+      <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
         <Card className="border-slate-200/70">
-          <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+          <div className="flex items-end justify-between gap-3">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-                주간 코디네이션
+                Weekly coordination
               </p>
-              <h2 className="mt-1.5 text-[24px] font-semibold tracking-[-0.03em] text-slate-950">
-                공유 일정과 개인 가능 시간
+              <h2 className="mt-1.5 text-[22px] font-semibold tracking-[-0.03em] text-slate-950">
+                Shared sessions and availability
               </h2>
             </div>
             {bestCollaborationWindow ? (
-              <div className="rounded-[18px] border border-emerald-200/80 bg-emerald-50/70 px-4 py-2.5 text-sm text-slate-700">
-                최적 연구실 시간: {getWeekdayLabel(bestCollaborationWindow.day, bestCollaborationWindow.startTime, bestCollaborationWindow.endTime)}
+              <div className="rounded-[18px] border border-emerald-200/80 bg-emerald-50/70 px-4 py-2 text-sm text-slate-700">
+                Best window: {getWeekdayTimeLabel(bestCollaborationWindow.day, bestCollaborationWindow.startTime, bestCollaborationWindow.endTime)}
               </div>
             ) : null}
           </div>
 
-          <div className="mt-5 grid gap-3">
-            {scheduleDiagnostics.map((item) => (
+          <div className="mt-5 space-y-3">
+            {scheduleDiagnostics.slice(0, 4).map((item) => (
               <div key={item.schedule.id} className="rounded-[20px] border border-slate-200/80 bg-slate-50/70 px-4 py-3.5">
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -568,40 +600,30 @@ export function DashboardPage() {
                       {item.schedule.title}
                     </p>
                     <p className="mt-1.5 text-sm text-slate-500">
-                      {getWeekdayLabel(item.schedule.day, item.schedule.startTime, item.schedule.endTime)}
+                      {getWeekdayTimeLabel(item.schedule.day, item.schedule.startTime, item.schedule.endTime)}
                     </p>
-                    <p className="mt-1 text-sm text-slate-500">{item.schedule.location}</p>
+                    <p className="mt-1 text-sm text-slate-500">{item.detail}</p>
                   </div>
                   <Badge tone={item.tone}>{item.label}</Badge>
                 </div>
-                <p className="mt-2 text-sm text-slate-500">{item.detail}</p>
-              </div>
-            ))}
-
-            {personalSchedules.slice(0, 1).map((schedule) => (
-              <div key={schedule.id} className="rounded-[20px] border border-slate-200/80 bg-white/85 px-4 py-3.5">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-                  개인 확보 시간
-                </p>
-                <p className="mt-2 text-[15px] font-semibold tracking-[-0.02em] text-slate-900">
-                  {schedule.title}
-                </p>
-                <p className="mt-1.5 text-sm text-slate-500">
-                  {getWeekdayLabel(schedule.day, schedule.startTime, schedule.endTime)}
-                </p>
               </div>
             ))}
           </div>
         </Card>
 
         <Card className="border-slate-200/70">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-              프로젝트 워치리스트
-            </p>
-            <h2 className="mt-1.5 text-[24px] font-semibold tracking-[-0.03em] text-slate-950">
-              이번 주 확인이 필요한 프로젝트
-            </h2>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                Project watchlist
+              </p>
+              <h2 className="mt-1.5 text-[22px] font-semibold tracking-[-0.03em] text-slate-950">
+                Projects requiring action this week
+              </h2>
+            </div>
+            <Link className="text-sm font-semibold text-accent-700" to="/projects">
+              All projects
+            </Link>
           </div>
 
           <div className="mt-5 grid gap-3">
@@ -616,17 +638,24 @@ export function DashboardPage() {
                     <p className="text-[15px] font-semibold tracking-[-0.02em] text-slate-900">
                       {item.project.title}
                     </p>
-                    <p className="mt-1.5 text-sm text-slate-500">{item.reasons.join(' / ')}</p>
+                    <p className="mt-1.5 text-sm text-slate-500">
+                      {[
+                        item.overdue > 0 ? `${item.overdue} overdue` : null,
+                        item.dueThisWeek > 0 ? `${item.dueThisWeek} due this week` : null,
+                        item.reviewWaiting > 0 ? `${item.reviewWaiting} review waiting` : null,
+                        item.blocked > 0 ? `${item.blocked} blocked` : null,
+                        item.coordinationIssues > 0 ? `${item.coordinationIssues} coordination issue` : null,
+                      ]
+                        .filter(Boolean)
+                        .join(' / ')}
+                    </p>
+                    {item.nextSession ? (
+                      <p className="mt-2 text-sm text-slate-500">
+                        Next session: {getWeekdayTimeLabel(item.nextSession.day, item.nextSession.startTime, item.nextSession.endTime)}
+                      </p>
+                    ) : null}
                   </div>
-                  <Badge
-                    tone={
-                      item.project.status === 'Active'
-                        ? 'success'
-                        : item.project.status === 'Planning'
-                          ? 'warning'
-                          : 'neutral'
-                    }
-                  >
+                  <Badge tone={getProjectTone(item.project)}>
                     {projectStatusLabels[item.project.status]}
                   </Badge>
                 </div>
@@ -637,32 +666,33 @@ export function DashboardPage() {
       </div>
 
       <Card className="border-slate-200/70 p-5">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-            최근 문서
-          </p>
-          <h2 className="mt-1.5 text-[18px] font-semibold tracking-[-0.03em] text-slate-950">
-            가볍게 확인하는 지식 업데이트
-          </h2>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+              Recent documents
+            </p>
+            <h2 className="mt-1.5 text-[18px] font-semibold tracking-[-0.03em] text-slate-950">
+              Lightweight reference only
+            </h2>
+          </div>
+          <span className="text-sm text-slate-400">Secondary</span>
         </div>
 
         <div className="mt-4 grid gap-3 md:grid-cols-3">
           {recentDocs.map((document) => {
-            const project = projects.find((projectItem) => projectItem.id === document.projectId);
+            const project = projects.find((item) => item.id === document.projectId);
+
             return (
               <Link
                 key={document.id}
-                className="rounded-[18px] border border-slate-200/80 bg-slate-50/70 px-4 py-3.5 transition hover:border-slate-300 hover:bg-white"
+                className="rounded-[18px] border border-slate-200/80 bg-slate-50/70 px-4 py-3 transition hover:border-slate-300 hover:bg-white"
                 to={`/projects/${document.projectId}/docs/${document.id}`}
               >
                 <p className="text-[14px] font-semibold tracking-[-0.02em] text-slate-900">
                   {document.title}
                 </p>
-                <p className="mt-1.5 text-sm text-slate-500">{project?.title ?? '알 수 없는 프로젝트'}</p>
-                <p className="mt-1 text-sm text-slate-500">{document.tags.join(', ')}</p>
-                <p className="mt-2.5 text-[13px] text-slate-500">
-                  업데이트 {formatShortDate(document.updatedAt)}
-                </p>
+                <p className="mt-1.5 text-sm text-slate-500">{project?.title ?? 'Unknown project'}</p>
+                <p className="mt-2 text-[13px] text-slate-500">Updated {formatShortDate(document.updatedAt)}</p>
               </Link>
             );
           })}

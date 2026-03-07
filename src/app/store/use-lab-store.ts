@@ -95,8 +95,70 @@ interface LabStore {
   setAppTheme: (theme: AppTheme) => void;
 }
 
+type PersistedLabStore = Partial<
+  Pick<
+    LabStore,
+    | 'users'
+    | 'projects'
+    | 'documents'
+    | 'tasks'
+    | 'schedules'
+    | 'timetableBlocks'
+    | 'currentUserId'
+    | 'isAuthenticated'
+    | 'appTheme'
+  >
+>;
+
 const now = () => new Date().toISOString();
 const createId = (prefix: string) => `${prefix}-${Math.random().toString(36).slice(2, 9)}`;
+
+function createInitialState() {
+  return {
+    users: mockUsers,
+    projects: mockProjects,
+    documents: mockDocuments,
+    tasks: mockTasks,
+    schedules: mockSchedules,
+    timetableBlocks: mockTimetableBlocks,
+    currentUserId: 'u3' as string | null,
+    isAuthenticated: false,
+    appTheme: 'silver' as AppTheme,
+  };
+}
+
+function sanitizePersistedState(persisted: unknown): PersistedLabStore {
+  if (!persisted || typeof persisted !== 'object') {
+    return {};
+  }
+
+  const state = persisted as Record<string, unknown>;
+  const initialState = createInitialState();
+
+  return {
+    users: Array.isArray(state.users) ? (state.users as LabStore['users']) : initialState.users,
+    projects: Array.isArray(state.projects) ? (state.projects as LabStore['projects']) : initialState.projects,
+    documents: Array.isArray(state.documents) ? (state.documents as LabStore['documents']) : initialState.documents,
+    tasks: Array.isArray(state.tasks) ? (state.tasks as LabStore['tasks']) : initialState.tasks,
+    schedules: Array.isArray(state.schedules) ? (state.schedules as LabStore['schedules']) : initialState.schedules,
+    timetableBlocks: Array.isArray(state.timetableBlocks)
+      ? (state.timetableBlocks as LabStore['timetableBlocks'])
+      : initialState.timetableBlocks,
+    currentUserId:
+      typeof state.currentUserId === 'string' || state.currentUserId === null
+        ? (state.currentUserId as string | null)
+        : initialState.currentUserId,
+    isAuthenticated:
+      typeof state.isAuthenticated === 'boolean' ? state.isAuthenticated : initialState.isAuthenticated,
+    appTheme:
+      state.appTheme === 'silver' ||
+      state.appTheme === 'mist' ||
+      state.appTheme === 'sky' ||
+      state.appTheme === 'sand'
+        ? (state.appTheme as AppTheme)
+        : initialState.appTheme,
+  };
+}
 
 function syncDocumentLinks(tasks: Task[], documentId: string, relatedTaskIds: string[]): Task[] {
   return tasks.map((task) => {
@@ -115,15 +177,7 @@ function syncDocumentLinks(tasks: Task[], documentId: string, relatedTaskIds: st
 export const useLabStore = create<LabStore>()(
   persist(
     (set, get) => ({
-      users: mockUsers,
-      projects: mockProjects,
-      documents: mockDocuments,
-      tasks: mockTasks,
-      schedules: mockSchedules,
-      timetableBlocks: mockTimetableBlocks,
-      currentUserId: 'u3',
-      isAuthenticated: false,
-      appTheme: 'silver',
+      ...createInitialState(),
       login: (email) => {
         const match = get().users.find((user) => user.email.toLowerCase() === email.toLowerCase()) ?? get().users[2];
         set({ currentUserId: match.id, isAuthenticated: true });
@@ -217,6 +271,12 @@ export const useLabStore = create<LabStore>()(
     }),
     {
       name: 'lab-workflow-os',
+      version: 2,
+      migrate: (persistedState) => sanitizePersistedState(persistedState),
+      merge: (persistedState, currentState) => ({
+        ...currentState,
+        ...sanitizePersistedState((persistedState as { state?: unknown } | undefined)?.state ?? persistedState),
+      }),
       partialize: (state) => ({
         users: state.users,
         projects: state.projects,
