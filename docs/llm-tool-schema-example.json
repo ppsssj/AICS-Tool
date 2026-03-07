@@ -1,0 +1,121 @@
+{
+  "tools": [
+    {
+      "name": "getWorkspaceContext",
+      "description": "Return current route, active project context, active document context, and recent projects.",
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "findProjects",
+      "description": "Search projects by user-provided name or phrase.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string"
+          }
+        },
+        "required": ["query"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "activateProjectContext",
+      "description": "Set active project context and navigate to the project workspace route.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "projectId": {
+            "type": "string"
+          }
+        },
+        "required": ["projectId"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "listProjectTasks",
+      "description": "List tasks in a project with optional filters.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "projectId": {
+            "type": "string"
+          },
+          "filter": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "dueWindow": {
+                "type": "string",
+                "enum": ["today", "week"]
+              },
+              "linkedDocOnly": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": ["projectId"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "listProjectDocuments",
+      "description": "List documents in a project.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "projectId": {
+            "type": "string"
+          }
+        },
+        "required": ["projectId"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "createProjectTask",
+      "description": "Create a task inside the currently resolved project context.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "projectId": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "priority": {
+            "type": "string",
+            "enum": ["Low", "Medium", "High", "Urgent"]
+          },
+          "assigneeId": {
+            "type": "string"
+          },
+          "dueDate": {
+            "type": "string"
+          },
+          "documentId": {
+            "type": "string"
+          }
+        },
+        "required": ["projectId", "title", "description", "priority"],
+        "additionalProperties": false
+      }
+    }
+  ]
+}

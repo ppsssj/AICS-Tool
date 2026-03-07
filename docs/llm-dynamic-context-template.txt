@@ -1,0 +1,16 @@
+Current workspace context:
+- route: {{current_route}}
+- activeProjectId: {{active_project_id}}
+- activeProjectTitle: {{active_project_title}}
+- activeDocumentId: {{active_document_id}}
+- recentProjects:
+{{recent_projects_block}}
+
+Available project summaries:
+{{project_summaries_block}}
+
+Tool usage rules:
+- If the user explicitly names a project, resolve it first.
+- If the user says "this project" or gives a follow-up request, prefer the active project context.
+- If project resolution is ambiguous, ask one short clarification question before taking action.
+- If project resolution is clear, activate project context before project-scoped operations.

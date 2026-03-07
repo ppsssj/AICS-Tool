@@ -77,6 +77,9 @@ interface LabStore {
   currentUserId: string | null;
   isAuthenticated: boolean;
   appTheme: AppTheme;
+  activeProjectId: string | null;
+  activeDocumentId: string | null;
+  recentProjectIds: string[];
   login: (email: string) => void;
   logout: () => void;
   createProject: (input: ProjectInput) => void;
@@ -93,6 +96,8 @@ interface LabStore {
   createTimetableBlock: (input: TimetableBlockInput) => void;
   setCurrentUserRole: (role: Role) => void;
   setAppTheme: (theme: AppTheme) => void;
+  setActiveProjectContext: (projectId: string | null) => void;
+  setActiveDocumentContext: (documentId: string | null) => void;
 }
 
 type PersistedLabStore = Partial<
@@ -107,6 +112,9 @@ type PersistedLabStore = Partial<
     | 'currentUserId'
     | 'isAuthenticated'
     | 'appTheme'
+    | 'activeProjectId'
+    | 'activeDocumentId'
+    | 'recentProjectIds'
   >
 >;
 
@@ -124,6 +132,9 @@ function createInitialState() {
     currentUserId: 'u3' as string | null,
     isAuthenticated: false,
     appTheme: 'silver' as AppTheme,
+    activeProjectId: null as string | null,
+    activeDocumentId: null as string | null,
+    recentProjectIds: [] as string[],
   };
 }
 
@@ -157,7 +168,22 @@ function sanitizePersistedState(persisted: unknown): PersistedLabStore {
       state.appTheme === 'sand'
         ? (state.appTheme as AppTheme)
         : initialState.appTheme,
+    activeProjectId:
+      typeof state.activeProjectId === 'string' || state.activeProjectId === null
+        ? (state.activeProjectId as string | null)
+        : initialState.activeProjectId,
+    activeDocumentId:
+      typeof state.activeDocumentId === 'string' || state.activeDocumentId === null
+        ? (state.activeDocumentId as string | null)
+        : initialState.activeDocumentId,
+    recentProjectIds: Array.isArray(state.recentProjectIds)
+      ? state.recentProjectIds.filter((value): value is string => typeof value === 'string').slice(0, 6)
+      : initialState.recentProjectIds,
   };
+}
+
+function pushRecentProject(recentProjectIds: string[], projectId: string): string[] {
+  return [projectId, ...recentProjectIds.filter((value) => value !== projectId)].slice(0, 6);
 }
 
 function syncDocumentLinks(tasks: Task[], documentId: string, relatedTaskIds: string[]): Task[] {
@@ -197,6 +223,12 @@ export const useLabStore = create<LabStore>()(
           documents: state.documents.filter((document) => document.projectId !== projectId),
           tasks: state.tasks.filter((task) => task.projectId !== projectId),
           schedules: state.schedules.filter((schedule) => schedule.projectId !== projectId),
+          activeProjectId: state.activeProjectId === projectId ? null : state.activeProjectId,
+          activeDocumentId:
+            state.documents.some((document) => document.projectId === projectId && document.id === state.activeDocumentId)
+              ? null
+              : state.activeDocumentId,
+          recentProjectIds: state.recentProjectIds.filter((value) => value !== projectId),
         })),
       createDocument: (input) => {
         const id = createId('d');
@@ -217,6 +249,7 @@ export const useLabStore = create<LabStore>()(
         set((state) => ({
           documents: state.documents.filter((document) => document.id !== documentId),
           tasks: state.tasks.map((task) => (task.documentId === documentId ? { ...task, documentId: undefined, updatedAt: now() } : task)),
+          activeDocumentId: state.activeDocumentId === documentId ? null : state.activeDocumentId,
         })),
       createTask: (input) =>
         set((state) => {
@@ -268,10 +301,16 @@ export const useLabStore = create<LabStore>()(
           users: state.users.map((user) => (user.id === state.currentUserId ? { ...user, role } : user)),
         })),
       setAppTheme: (theme) => set({ appTheme: theme }),
+      setActiveProjectContext: (projectId) =>
+        set((state) => ({
+          activeProjectId: projectId,
+          recentProjectIds: projectId ? pushRecentProject(state.recentProjectIds, projectId) : state.recentProjectIds,
+        })),
+      setActiveDocumentContext: (documentId) => set({ activeDocumentId: documentId }),
     }),
     {
       name: 'lab-workflow-os',
-      version: 2,
+      version: 3,
       migrate: (persistedState) => sanitizePersistedState(persistedState),
       merge: (persistedState, currentState) => ({
         ...currentState,
@@ -287,6 +326,9 @@ export const useLabStore = create<LabStore>()(
         currentUserId: state.currentUserId,
         isAuthenticated: state.isAuthenticated,
         appTheme: state.appTheme,
+        activeProjectId: state.activeProjectId,
+        activeDocumentId: state.activeDocumentId,
+        recentProjectIds: state.recentProjectIds,
       }),
     },
   ),
