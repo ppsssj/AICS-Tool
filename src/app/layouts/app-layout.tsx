@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useLabStore } from '@/app/store/use-lab-store';
-import { resolveAssistantPrompt } from '@/features/assistant/mock-project-assistant';
+import { AssistantWorkspacePanel } from '@/features/assistant/assistant-workspace-panel';
 import { roleLabels } from '@/shared/lib/labels';
-import { cn } from '@/shared/lib/cn';
 import { Button } from '@/shared/ui/button';
 
 const navItems = [
@@ -13,27 +12,9 @@ const navItems = [
   { to: '/settings', label: '설정' },
 ];
 
-const quickPrompts = ['졸업작품 프로젝트 열기', '이 프로젝트 작업 보드 보여줘', '반도체 분석 일정 열기'];
-
 interface BreadcrumbItem {
   label: string;
   to?: string;
-}
-
-interface AssistantMessage {
-  id: string;
-  role: 'user' | 'assistant';
-  text: string;
-  suggestions?: string[];
-}
-
-function createMessage(role: AssistantMessage['role'], text: string, suggestions?: string[]): AssistantMessage {
-  return {
-    id: `${role}-${Math.random().toString(36).slice(2, 9)}`,
-    role,
-    text,
-    suggestions,
-  };
 }
 
 function buildBreadcrumbs(
@@ -117,12 +98,6 @@ export function AppLayout() {
   const setActiveProjectContext = useLabStore((state) => state.setActiveProjectContext);
   const setActiveDocumentContext = useLabStore((state) => state.setActiveDocumentContext);
 
-  const [assistantOpen, setAssistantOpen] = useState(false);
-  const [assistantInput, setAssistantInput] = useState('');
-  const [assistantMessages, setAssistantMessages] = useState<AssistantMessage[]>([
-    createMessage('assistant', '프로젝트 이름이나 작업 의도를 입력하면 해당 워크스페이스로 바로 이동합니다.'),
-  ]);
-
   const currentUser = users.find((user) => user.id === currentUserId);
   const breadcrumbs = buildBreadcrumbs(location.pathname, projects, documents);
   const contextLabel = breadcrumbs.length > 1 ? breadcrumbs.slice(-2).map((item) => item.label).join(' / ') : breadcrumbs[0]?.label;
@@ -167,45 +142,6 @@ export function AppLayout() {
     [projects, recentProjectIds],
   );
 
-  function applyPrompt(prompt: string) {
-    const response = resolveAssistantPrompt(prompt, {
-      projects,
-      documents,
-      tasks,
-      schedules,
-      activeProjectId,
-      recentProjectIds,
-    });
-
-    setAssistantMessages((current) =>
-      [...current, createMessage('user', prompt), createMessage('assistant', response.message, response.suggestions)].slice(-8),
-    );
-
-    if (response.projectId !== undefined) {
-      setActiveProjectContext(response.projectId);
-    }
-
-    if (response.documentId !== undefined) {
-      setActiveDocumentContext(response.documentId);
-    }
-
-    if (response.path) {
-      navigate(response.path);
-    }
-  }
-
-  function handleAssistantSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const prompt = assistantInput.trim();
-
-    if (!prompt) {
-      return;
-    }
-
-    applyPrompt(prompt);
-    setAssistantInput('');
-  }
-
   return (
     <div className="min-h-screen bg-shell text-slate-950">
       <div className="mx-auto grid min-h-screen max-w-[1640px] grid-cols-1 gap-0 px-3 py-3 lg:grid-cols-[292px_1fr]">
@@ -225,19 +161,15 @@ export function AppLayout() {
                 </div>
                 <div className="min-w-0">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">Lab OS</p>
-                  <h1 className="mt-1 text-lg font-semibold tracking-[-0.02em] text-slate-800">연구 워크플로 운영 허브</h1>
+                  <h1 className="mt-1 text-lg font-semibold tracking-[-0.02em] text-slate-800">연구 워크플로 허브</h1>
                 </div>
               </div>
 
               <div className="mt-5 border-t border-slate-200/70 pt-4">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">현재 사용자</p>
-                <h2 className="mt-3 truncate text-[16px] font-semibold tracking-[-0.02em] text-slate-900">
-                  {currentUser.name}
-                </h2>
+                <h2 className="mt-3 truncate text-[16px] font-semibold tracking-[-0.02em] text-slate-900">{currentUser.name}</h2>
                 <p className="mt-1 text-sm text-slate-600">{currentUser.title}</p>
-                <p className="mt-3 text-xs uppercase tracking-[0.16em] text-slate-400">
-                  {roleLabels[currentUser.role]} / AICS Lab
-                </p>
+                <p className="mt-3 text-xs uppercase tracking-[0.16em] text-slate-400">{roleLabels[currentUser.role]} / AICS Lab</p>
                 <p className="mt-2 truncate text-sm text-slate-500">{currentUser.email}</p>
               </div>
 
@@ -301,7 +233,9 @@ export function AppLayout() {
                 </div>
               </div>
             ) : (
-              <p className="mt-4 text-sm leading-6 text-slate-500">아직 활성 프로젝트가 없습니다. 헤더의 AI 워크스페이스에서 프로젝트 이름을 입력해 보세요.</p>
+              <p className="mt-4 text-sm leading-6 text-slate-500">
+                아직 활성 프로젝트가 없습니다. 오른쪽 아래 AI 워크스페이스에서 프로젝트 이름을 입력하면 바로 연결됩니다.
+              </p>
             )}
 
             {recentProjects.length > 0 ? (
@@ -329,7 +263,7 @@ export function AppLayout() {
           {currentUser ? (
             <div className="relative mt-auto pt-10">
               <div className="rounded-[24px] border border-[rgb(var(--theme-sidebar-card-border)_/_0.88)] bg-[rgb(var(--theme-sidebar-card-bg)_/_0.76)] p-5 shadow-[0_12px_24px_rgba(148,163,184,0.12),inset_0_1px_0_rgba(255,255,255,0.75)] backdrop-blur-md">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">세션</p>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">액션</p>
                 <Button
                   variant="ghost"
                   className="mt-4 w-full justify-between border border-slate-200/85 bg-white/85 px-4 text-slate-700 hover:border-slate-300/90 hover:bg-white"
@@ -375,127 +309,6 @@ export function AppLayout() {
                       현재 컨텍스트: {activeProject.title}
                     </button>
                   ) : null}
-                  <Button
-                    variant={assistantOpen ? 'secondary' : 'ghost'}
-                    className="px-4"
-                    onClick={() => setAssistantOpen((current) => !current)}
-                  >
-                    AI 워크스페이스
-                  </Button>
-                </div>
-              </div>
-
-              <div
-                className={cn(
-                  'overflow-hidden transition-all duration-200',
-                  assistantOpen ? 'max-h-[480px] opacity-100' : 'max-h-0 opacity-0',
-                )}
-              >
-                <div className="grid gap-4 rounded-[24px] border border-slate-200/85 bg-white/82 p-4 shadow-[0_14px_28px_rgba(148,163,184,0.10)] xl:grid-cols-[1.3fr_0.7fr]">
-                  <div>
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Project-aware assistant</p>
-                        <h2 className="mt-1 text-[18px] font-semibold tracking-[-0.02em] text-slate-950">프로젝트 맥락 이동 테스트</h2>
-                      </div>
-                      {activeProject ? (
-                        <span className="rounded-full border border-accent-200/80 bg-accent-50/70 px-3 py-1.5 text-xs font-medium text-accent-700">
-                          {activeProject.title}
-                        </span>
-                      ) : null}
-                    </div>
-
-                    <form className="mt-4 space-y-3" onSubmit={handleAssistantSubmit}>
-                      <label className="block">
-                        <span className="sr-only">assistant prompt</span>
-                        <input
-                          className="w-full rounded-[16px] border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[rgb(var(--theme-accent-300)_/_0.95)] focus:ring-2 focus:ring-[rgb(var(--theme-accent-200)_/_0.65)]"
-                          onChange={(event) => setAssistantInput(event.target.value)}
-                          placeholder="예: 졸업작품 프로젝트 열기, 이 프로젝트 문서 보여줘"
-                          value={assistantInput}
-                        />
-                      </label>
-                      <div className="flex flex-wrap gap-2">
-                        <Button type="submit">실행</Button>
-                        {quickPrompts.map((prompt) => (
-                          <button
-                            key={prompt}
-                            className="rounded-full border border-slate-200/85 bg-slate-50/80 px-3 py-2 text-xs font-medium text-slate-600 transition hover:border-slate-300 hover:bg-white hover:text-slate-900"
-                            onClick={() => {
-                              setAssistantInput(prompt);
-                            }}
-                            type="button"
-                          >
-                            {prompt}
-                          </button>
-                        ))}
-                      </div>
-                    </form>
-
-                    <div className="mt-4 space-y-2">
-                      {assistantMessages.map((message) => (
-                        <div
-                          key={message.id}
-                          className={cn(
-                            'rounded-[18px] px-4 py-3 text-sm leading-6',
-                            message.role === 'assistant'
-                              ? 'border border-slate-200/80 bg-slate-50/75 text-slate-700'
-                              : 'border border-[rgb(var(--theme-accent-200)_/_0.75)] bg-accent-50/65 text-slate-900',
-                          )}
-                        >
-                          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
-                            {message.role === 'assistant' ? 'Assistant' : 'You'}
-                          </p>
-                          <p className="mt-1">{message.text}</p>
-                          {message.role === 'assistant' && message.suggestions && message.suggestions.length > 0 ? (
-                            <div className="mt-3 flex flex-wrap gap-2">
-                              {message.suggestions.map((suggestion) => (
-                                <button
-                                  key={suggestion}
-                                  className="rounded-full border border-slate-200/85 bg-white/88 px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:border-slate-300 hover:text-slate-900"
-                                  onClick={() => applyPrompt(suggestion)}
-                                  type="button"
-                                >
-                                  {suggestion}
-                                </button>
-                              ))}
-                            </div>
-                          ) : null}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="rounded-[20px] border border-slate-200/80 bg-slate-50/70 p-4">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">How it works</p>
-                    <div className="mt-4 space-y-3 text-sm leading-6 text-slate-600">
-                      <p>프로젝트명을 말하면 해당 워크스페이스로 이동하고 AI 컨텍스트도 같이 바뀝니다.</p>
-                      <p>현재 프로젝트 안에 있을 때는 "이 프로젝트 작업 보여줘"처럼 현재 맥락 기준 요청도 처리합니다.</p>
-                      <p>문서, 작업, 일정 키워드를 함께 말하면 해당 탭으로 바로 이동합니다.</p>
-                    </div>
-
-                    {recentProjects.length > 0 ? (
-                      <div className="mt-5 border-t border-slate-200/80 pt-4">
-                        <p className="text-xs font-semibold text-slate-500">최근 프로젝트 바로가기</p>
-                        <div className="mt-3 grid gap-2">
-                          {recentProjects.slice(0, 4).map((project) => (
-                            <button
-                              key={project.id}
-                              className="rounded-[16px] border border-slate-200/85 bg-white/90 px-3 py-2.5 text-left text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-white"
-                              onClick={() => {
-                                setActiveProjectContext(project.id);
-                                setActiveDocumentContext(null);
-                                navigate(`/projects/${project.id}`);
-                              }}
-                              type="button"
-                            >
-                              {project.title}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    ) : null}
-                  </div>
                 </div>
               </div>
             </div>
@@ -506,6 +319,18 @@ export function AppLayout() {
           </main>
         </div>
       </div>
+
+      <AssistantWorkspacePanel
+        activeDocumentId={activeDocumentId}
+        activeProjectId={activeProjectId}
+        documents={documents}
+        projects={projects}
+        recentProjectIds={recentProjectIds}
+        schedules={schedules}
+        setActiveDocumentContext={setActiveDocumentContext}
+        setActiveProjectContext={setActiveProjectContext}
+        tasks={tasks}
+      />
     </div>
   );
 }
