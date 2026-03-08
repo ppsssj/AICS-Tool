@@ -86,6 +86,7 @@ export function AppLayout() {
   const navigate = useNavigate();
 
   const currentUserId = useLabStore((state) => state.currentUserId);
+  const createProject = useLabStore((state) => state.createProject);
   const documents = useLabStore((state) => state.documents);
   const logout = useLabStore((state) => state.logout);
   const projects = useLabStore((state) => state.projects);
@@ -321,6 +322,8 @@ export function AppLayout() {
       </div>
 
       <AssistantWorkspacePanel
+        createProject={createProject}
+        currentUserId={currentUserId}
         activeDocumentId={activeDocumentId}
         activeProjectId={activeProjectId}
         documents={documents}

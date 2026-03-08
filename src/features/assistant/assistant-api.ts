@@ -1,4 +1,4 @@
-import type { Document, Project, Schedule, Task } from '@/entities/models';
+import type { Document, Project, ProjectStatus, Schedule, Task } from '@/entities/models';
 
 export interface AssistantHistoryItem {
   role: 'user' | 'assistant';
@@ -25,10 +25,13 @@ export interface AssistantWorkspacePayload {
 export interface AssistantServerResponse {
   message: string;
   action: {
-    type: 'none' | 'navigate';
+    type: 'none' | 'navigate' | 'create_project';
     projectId: string | null;
     documentId: string | null;
     path: string | null;
+    title?: string | null;
+    description?: string | null;
+    status?: ProjectStatus | null;
   };
   suggestions: string[];
   raw?: string;

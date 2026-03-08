@@ -10,8 +10,6 @@ import { resolveAssistantPrompt } from '@/features/assistant/mock-project-assist
 import { cn } from '@/shared/lib/cn';
 import { Button } from '@/shared/ui/button';
 
-const quickPrompts = ['졸업작품 프로젝트 열기', '현재 프로젝트 작업 보드 보여줘', '반도체 분석 일정 열기'];
-
 const EDGE_PADDING = 16;
 const MIN_PANEL_WIDTH = 320;
 const MIN_PANEL_HEIGHT = 360;
@@ -23,9 +21,11 @@ interface AssistantWorkspacePanelProps {
   documents: Document[];
   tasks: Task[];
   schedules: Schedule[];
+  currentUserId: string | null;
   activeProjectId: string | null;
   activeDocumentId: string | null;
   recentProjectIds: string[];
+  createProject: (input: { title: string; description: string; status: 'Planning' | 'Active' | 'Done' | 'Archived'; memberIds: string[] }) => string;
   setActiveProjectContext: (projectId: string | null) => void;
   setActiveDocumentContext: (documentId: string | null) => void;
 }
@@ -55,6 +55,35 @@ function createMessage(role: AssistantMessage['role'], text: string, suggestions
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
+}
+
+function normalizeProjectTitle(value: string) {
+  return value.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function buildQuickPrompts(args: {
+  projects: Project[];
+  recentProjectIds: string[];
+  activeProjectId: string | null;
+}): string[] {
+  const recentProjects = args.recentProjectIds
+    .map((projectId) => args.projects.find((project) => project.id === projectId))
+    .filter((project): project is Project => Boolean(project));
+  const activeProject = args.projects.find((project) => project.id === args.activeProjectId) ?? null;
+  const candidates = [activeProject, ...recentProjects].filter((project): project is Project => Boolean(project));
+  const uniqueProjects = candidates.filter(
+    (project, index) => candidates.findIndex((candidate) => candidate.id === project.id) === index,
+  );
+
+  const prompts = [
+    activeProject ? '현재 프로젝트 작업 보드 보여줘' : null,
+    uniqueProjects[0] ? `${uniqueProjects[0].title} 열어줘` : null,
+    uniqueProjects[0] ? `${uniqueProjects[0].title} 일정 보여줘` : null,
+    uniqueProjects[1] ? `${uniqueProjects[1].title} 작업 보드 보여줘` : null,
+    !activeProject && uniqueProjects.length === 0 ? '최근 프로젝트 보여줘' : null,
+  ];
+
+  return prompts.filter((prompt): prompt is string => Boolean(prompt)).slice(0, 4);
 }
 
 function getViewportBounds() {
@@ -117,9 +146,11 @@ export function AssistantWorkspacePanel({
   documents,
   tasks,
   schedules,
+  currentUserId,
   activeProjectId,
   activeDocumentId,
   recentProjectIds,
+  createProject,
   setActiveProjectContext,
   setActiveDocumentContext,
 }: AssistantWorkspacePanelProps) {
@@ -153,6 +184,11 @@ export function AssistantWorkspacePanel({
   ]);
 
   const activeProject = projects.find((project) => project.id === activeProjectId) ?? null;
+  const quickPrompts = buildQuickPrompts({
+    projects,
+    recentProjectIds,
+    activeProjectId,
+  });
 
   useEffect(() => {
     function handleViewportResize() {
@@ -253,6 +289,29 @@ export function AssistantWorkspacePanel({
 
       if (response.action.type === 'navigate' && response.action.path) {
         navigate(response.action.path);
+      }
+
+      if (response.action.type === 'create_project' && response.action.title) {
+        const duplicateProject =
+          projects.find(
+            (project) => normalizeProjectTitle(project.title) === normalizeProjectTitle(response.action.title ?? ''),
+          ) ?? null;
+
+        if (duplicateProject) {
+          setActiveProjectContext(duplicateProject.id);
+          navigate(`/projects/${duplicateProject.id}`);
+        } else {
+          const createdProjectId = createProject({
+            title: response.action.title,
+            description: response.action.description || `${response.action.title} 프로젝트 작업 공간입니다.`,
+            status: response.action.status ?? 'Planning',
+            memberIds: currentUserId ? [currentUserId] : [],
+          });
+
+          setActiveProjectContext(createdProjectId);
+          setActiveDocumentContext(null);
+          navigate(`/projects/${createdProjectId}`);
+        }
       }
 
       setStatusMessage(null);
@@ -399,7 +458,7 @@ export function AssistantWorkspacePanel({
                     className="w-full rounded-[16px] border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[rgb(var(--theme-accent-300)_/_0.95)] focus:ring-2 focus:ring-[rgb(var(--theme-accent-200)_/_0.65)] disabled:cursor-not-allowed disabled:bg-slate-50"
                     disabled={isLoading}
                     onChange={(event) => setAssistantInput(event.target.value)}
-                    placeholder="예: 졸업작품 프로젝트 열기, 현재 프로젝트 작업 보드 보여줘"
+                    placeholder="예: 최근 프로젝트 보여줘, 현재 프로젝트 작업 보드 보여줘"
                     value={assistantInput}
                   />
                 </label>

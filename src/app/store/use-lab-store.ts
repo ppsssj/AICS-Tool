@@ -82,7 +82,7 @@ interface LabStore {
   recentProjectIds: string[];
   login: (email: string) => void;
   logout: () => void;
-  createProject: (input: ProjectInput) => void;
+  createProject: (input: ProjectInput) => string;
   updateProject: (projectId: string, input: ProjectInput) => void;
   deleteProject: (projectId: string) => void;
   createDocument: (input: DocumentInput) => string;
@@ -209,10 +209,13 @@ export const useLabStore = create<LabStore>()(
         set({ currentUserId: match.id, isAuthenticated: true });
       },
       logout: () => set({ isAuthenticated: false }),
-      createProject: (input) =>
+      createProject: (input) => {
+        const id = createId('p');
         set((state) => ({
-          projects: [{ id: createId('p'), ...input, updatedAt: now() }, ...state.projects],
-        })),
+          projects: [{ id, ...input, updatedAt: now() }, ...state.projects],
+        }));
+        return id;
+      },
       updateProject: (projectId, input) =>
         set((state) => ({
           projects: state.projects.map((project) => (project.id === projectId ? { ...project, ...input, updatedAt: now() } : project)),
