@@ -118,6 +118,42 @@ async function handleAssistantChat(req, res) {
       return;
     }
 
+    const localTaskCreateResponse = resolveLocalTaskCreateResponseV1(message, workspace);
+    if (localTaskCreateResponse) {
+      sendJson(res, 200, localTaskCreateResponse);
+      return;
+    }
+
+    const localTaskStatusResponse = resolveLocalTaskStatusResponseV1(message, workspace);
+    if (localTaskStatusResponse) {
+      sendJson(res, 200, localTaskStatusResponse);
+      return;
+    }
+
+    const localTaskDeleteResponse = resolveLocalTaskDeleteResponseV1(message, workspace);
+    if (localTaskDeleteResponse) {
+      sendJson(res, 200, localTaskDeleteResponse);
+      return;
+    }
+
+    const localDocumentDeleteResponse = resolveLocalDocumentDeleteResponseV1(message, workspace);
+    if (localDocumentDeleteResponse) {
+      sendJson(res, 200, localDocumentDeleteResponse);
+      return;
+    }
+
+    const localDocumentCreateResponse = resolveLocalDocumentCreateResponseV1(message, workspace);
+    if (localDocumentCreateResponse) {
+      sendJson(res, 200, localDocumentCreateResponse);
+      return;
+    }
+
+    const localScheduleCreateResponse = resolveLocalScheduleCreateResponseV1(message, workspace);
+    if (localScheduleCreateResponse) {
+      sendJson(res, 200, localScheduleCreateResponse);
+      return;
+    }
+
     const localProjectCreateResponse = resolveLocalProjectCreateResponseV2(message);
     if (localProjectCreateResponse) {
       sendJson(res, 200, localProjectCreateResponse);
@@ -128,12 +164,23 @@ async function handleAssistantChat(req, res) {
     const responseFormatPrompt = [
       'Return only valid JSON.',
       'Use this exact shape:',
-      '{"message":"string","action":{"type":"none","projectId":null,"documentId":null,"path":null,"title":null,"description":null,"status":null},"suggestions":["string"]}',
-      'Allowed action.type values: "none", "navigate", "create_project".',
+      '{"message":"string","action":{"type":"none","projectId":null,"documentId":null,"taskId":null,"path":null,"title":null,"description":null,"body":null,"status":null,"priority":null,"dueDate":null,"tags":null,"scheduleType":null,"taskStatus":null,"day":null,"startTime":null,"endTime":null,"location":null,"note":null},"suggestions":["string"]}',
+      'Allowed action.type values: "none", "navigate", "create_project", "create_task", "create_document", "create_schedule", "update_task_status", "confirm_delete_task", "confirm_delete_document".',
       'Use "navigate" only when you are confident about the target project or route.',
       'Use "create_project" only when the user explicitly asks to create a new project and the title is clear.',
       'If a near-exact existing project already matches, prefer "navigate" instead of creating a duplicate.',
       'For "create_project", fill action.title and optionally action.description/action.status. Use status "Planning" by default.',
+      'Use "create_task" only when the user explicitly asks to add or create a task and the task title is clear.',
+      'For "create_task", set action.projectId to the resolved project. Prefer the active project when the user says "current project" or gives no other project name.',
+      'For "create_task", fill action.title and optionally action.description/action.priority/action.dueDate. Use ISO date format YYYY-MM-DD for dueDate.',
+      'Use "create_document" only when the user explicitly asks to create or add a document and the document title is clear.',
+      'For "create_document", set action.projectId to the resolved project and fill action.title. Optionally fill action.body and action.tags.',
+      'Use "create_schedule" only when the user explicitly asks to create, add, or register a schedule and the core fields are clear.',
+      'For "create_schedule", set action.projectId to the resolved project, action.scheduleType to "Project", action.day to a weekday enum, and action.startTime/action.endTime to HH:MM.',
+      'For "create_schedule", optionally fill action.location and action.note.',
+      'Use "update_task_status" only when the target task and target status are both clear.',
+      'For "update_task_status", fill action.taskId, action.projectId, and action.taskStatus.',
+      'Use "confirm_delete_task" or "confirm_delete_document" for destructive delete requests. Do not delete immediately.',
       'When the request is ambiguous, keep action.type as "none" and ask one short clarification question.',
       'Keep message concise and action-oriented.',
     ].join('\n');
@@ -580,6 +627,722 @@ function cleanupProjectTitleV2(value) {
     .trim();
 }
 
+function resolveLocalTaskCreateResponseV1(message, workspace) {
+  const normalizedMessage = message.trim();
+
+  if (!isExplicitTaskCreateIntentV1(normalizedMessage)) {
+    return null;
+  }
+
+  const resolvedProject = resolveTaskProjectFromWorkspaceV1(normalizedMessage, workspace);
+  if (!resolvedProject) {
+    const recentProjectSuggestions = Array.isArray(workspace?.recentProjects)
+      ? workspace.recentProjects.slice(0, 3).map((project) => `${project.title} \uC791\uC5C5 \uCD94\uAC00`)
+      : [];
+
+    return {
+      message: '\uC5B4\uB290 \uD504\uB85C\uC81D\uD2B8\uC5D0 \uC791\uC5C5\uC744 \uB9CC\uB4E4\uAE4C\uC694?',
+      action: {
+        type: 'none',
+        projectId: null,
+        documentId: null,
+        path: null,
+        title: null,
+        description: null,
+        status: null,
+        priority: null,
+        dueDate: null,
+      },
+      suggestions: recentProjectSuggestions.length > 0 ? recentProjectSuggestions : ['\uD604\uC7AC \uD504\uB85C\uC81D\uD2B8 \uC5F4\uAE30'],
+      raw: '',
+    };
+  }
+
+  const title = extractTaskTitleFromCreateIntentV1(normalizedMessage);
+  if (!title) {
+    return {
+      message: '\uB9CC\uB4E4 \uC791\uC5C5 \uC81C\uBAA9\uC744 \uC54C\uB824\uC8FC\uC138\uC694.',
+      action: {
+        type: 'none',
+        projectId: resolvedProject.id,
+        documentId: null,
+        path: null,
+        title: null,
+        description: null,
+        status: null,
+        priority: null,
+        dueDate: null,
+      },
+      suggestions: [
+        `${resolvedProject.title} \uC5D0 \uC791\uC5C5 \uCD94\uAC00. \uC81C\uBAA9\uC740 \uC2E4\uD5D8 \uAE30\uB85D \uC815\uB9AC`,
+        '\uC81C\uBAA9\uC740 \uB370\uC774\uD130 \uAC80\uD1A0',
+      ],
+      raw: '',
+    };
+  }
+
+  return {
+    message: `"${resolvedProject.title}"\uC5D0 \uC791\uC5C5 "${title}"\uB97C \uCD94\uAC00\uD560\uAC8C\uC694.`,
+    action: {
+      type: 'create_task',
+      projectId: resolvedProject.id,
+      documentId: null,
+      path: `/projects/${resolvedProject.id}/tasks`,
+      title,
+      description: extractTaskDescriptionFromCreateIntentV1(normalizedMessage, title),
+      status: null,
+      priority: extractTaskPriorityFromCreateIntentV1(normalizedMessage),
+      dueDate: extractTaskDueDateFromCreateIntentV1(normalizedMessage),
+    },
+    suggestions: [
+      `${resolvedProject.title} \uC791\uC5C5 \uBCF4\uB4DC \uBCF4\uAE30`,
+      '\uB2E4\uB978 \uC791\uC5C5 \uCD94\uAC00',
+    ],
+    raw: '',
+  };
+}
+
+function isExplicitTaskCreateIntentV1(message) {
+  const taskWord = '\uC791\uC5C5';
+  const createHints = ['\uB9CC\uB4E4', '\uCD94\uAC00', '\uB4F1\uB85D', '\uC0DD\uC131'];
+  return message.includes(taskWord) && createHints.some((hint) => message.includes(hint));
+}
+
+function resolveTaskProjectFromWorkspaceV1(message, workspace) {
+  if (workspace?.activeProjectId && /(현재 프로젝트|이 프로젝트|\uD604\uC7AC \uD504\uB85C\uC81D\uD2B8|\uC774 \uD504\uB85C\uC81D\uD2B8)/i.test(message)) {
+    return {
+      id: workspace.activeProjectId,
+      title: workspace.activeProjectTitle ?? workspace.activeProjectId,
+    };
+  }
+
+  const summaries = Array.isArray(workspace?.projectSummaries) ? workspace.projectSummaries : [];
+  const normalizedMessage = normalizeProjectLookupTextV1(message);
+
+  const matched = summaries.find((project) =>
+    normalizeProjectLookupTextV1(project.title).length > 0 &&
+    normalizedMessage.includes(normalizeProjectLookupTextV1(project.title)),
+  );
+
+  if (matched) {
+    return {
+      id: matched.id,
+      title: matched.title,
+    };
+  }
+
+  if (workspace?.activeProjectId) {
+    return {
+      id: workspace.activeProjectId,
+      title: workspace.activeProjectTitle ?? workspace.activeProjectId,
+    };
+  }
+
+  return null;
+}
+
+function normalizeProjectLookupTextV1(value) {
+  return String(value ?? '')
+    .toLowerCase()
+    .replace(/\s+/g, '')
+    .replace(/[^\p{L}\p{N}]/gu, '');
+}
+
+function extractTaskTitleFromCreateIntentV1(message) {
+  const titleMatch = message.match(/(?:제목|작업명|이름)\s*(?:은|는|:)\s*["']?(.+?)["']?(?:[,.]|$)/i);
+  if (titleMatch?.[1]) {
+    return cleanupTaskTitleV1(titleMatch[1]);
+  }
+
+  const quotedTaskMatch = message.match(/["'](.+?)["']\s*작업/i);
+  if (quotedTaskMatch?.[1]) {
+    return cleanupTaskTitleV1(quotedTaskMatch[1]);
+  }
+
+  return null;
+}
+
+function extractTaskDescriptionFromCreateIntentV1(message, title) {
+  const descriptionMatch = message.match(/설명\s*(?:은|는|:)\s*["']?(.+?)["']?(?:$)/i);
+  if (descriptionMatch?.[1]) {
+    return descriptionMatch[1]
+      .replace(/\s*,?\s*(?:우선순위|마감일)\s*(?:은|는|:).*$/i, '')
+      .trim();
+  }
+
+  return `${title} 작업입니다.`;
+}
+
+function extractTaskPriorityFromCreateIntentV1(message) {
+  if (/urgent|긴급/i.test(message)) return 'Urgent';
+  if (/high|높음|높은/i.test(message)) return 'High';
+  if (/low|낮음|낮은/i.test(message)) return 'Low';
+  if (/medium|보통|중간/i.test(message)) return 'Medium';
+  return null;
+}
+
+function extractTaskDueDateFromCreateIntentV1(message) {
+  const isoMatch = message.match(/\b(\d{4}-\d{2}-\d{2})\b/);
+  return isoMatch?.[1] ?? null;
+}
+
+function cleanupTaskTitleV1(value) {
+  return value
+    .replace(/\s*(?:설명|우선순위|마감일)\s*(?:은|는|:).*$/i, '')
+    .replace(/[.,"']+$/g, '')
+    .trim();
+}
+
+function resolveLocalDocumentCreateResponseV1(message, workspace) {
+  const normalizedMessage = message.trim();
+
+  if (!isExplicitDocumentCreateIntentV1(normalizedMessage)) {
+    return null;
+  }
+
+  const resolvedProject = resolveTaskProjectFromWorkspaceV1(normalizedMessage, workspace);
+  if (!resolvedProject) {
+    const recentProjectSuggestions = Array.isArray(workspace?.recentProjects)
+      ? workspace.recentProjects.slice(0, 3).map((project) => `${project.title} 문서 추가`)
+      : [];
+
+    return {
+      message: '어느 프로젝트에 문서를 만들까요?',
+      action: {
+        type: 'none',
+        projectId: null,
+        documentId: null,
+        path: null,
+        title: null,
+        description: null,
+        body: null,
+        status: null,
+        priority: null,
+        dueDate: null,
+        tags: null,
+      },
+      suggestions: recentProjectSuggestions.length > 0 ? recentProjectSuggestions : ['현재 프로젝트 문서 만들기'],
+      raw: '',
+    };
+  }
+
+  const title = extractDocumentTitleFromCreateIntentV1(normalizedMessage);
+  if (!title) {
+    return {
+      message: '만들 문서 제목을 알려주세요.',
+      action: {
+        type: 'none',
+        projectId: resolvedProject.id,
+        documentId: null,
+        path: null,
+        title: null,
+        description: null,
+        body: null,
+        status: null,
+        priority: null,
+        dueDate: null,
+        tags: null,
+      },
+      suggestions: [
+        `${resolvedProject.title} 문서 추가. 제목은 실험 메모`,
+        '제목은 회의록 초안',
+      ],
+      raw: '',
+    };
+  }
+
+  return {
+    message: `"${resolvedProject.title}"에 문서 "${title}"를 만들게요.`,
+    action: {
+      type: 'create_document',
+      projectId: resolvedProject.id,
+      documentId: null,
+      path: `/projects/${resolvedProject.id}/docs`,
+      title,
+      description: null,
+      body: extractDocumentBodyFromCreateIntentV1(normalizedMessage, title),
+      status: null,
+      priority: null,
+      dueDate: null,
+      tags: extractDocumentTagsFromCreateIntentV1(normalizedMessage),
+    },
+    suggestions: [
+      `${resolvedProject.title} 문서 보기`,
+      '다른 문서 추가',
+    ],
+    raw: '',
+  };
+}
+
+function isExplicitDocumentCreateIntentV1(message) {
+  const createHints = ['만들', '생성', '추가', '작성'];
+  return message.includes('문서') && createHints.some((hint) => message.includes(hint));
+}
+
+function extractDocumentTitleFromCreateIntentV1(message) {
+  const titleMatch = message.match(/(?:제목|문서명|이름)\s*(?:은|는|:)\s*["']?(.+?)["']?(?:[,.]|$)/i);
+  if (titleMatch?.[1]) {
+    return cleanupDocumentTitleV1(titleMatch[1]);
+  }
+
+  const quotedDocumentMatch = message.match(/["'](.+?)["']\s*문서/i);
+  if (quotedDocumentMatch?.[1]) {
+    return cleanupDocumentTitleV1(quotedDocumentMatch[1]);
+  }
+
+  return null;
+}
+
+function extractDocumentBodyFromCreateIntentV1(message, title) {
+  const bodyMatch = message.match(/(?:본문|내용|초안)\s*(?:은|는|:)\s*["']?(.+?)["']?(?:$)/i);
+  if (bodyMatch?.[1]) {
+    return bodyMatch[1]
+      .replace(/\s*,?\s*태그\s*(?:는|은|:).*$/i, '')
+      .trim();
+  }
+
+  return `${title} 문서 초안입니다.`;
+}
+
+function extractDocumentTagsFromCreateIntentV1(message) {
+  const tagsMatch = message.match(/태그\s*(?:는|은|:)\s*["']?(.+?)["']?(?:$)/i);
+  if (!tagsMatch?.[1]) {
+    return null;
+  }
+
+  return tagsMatch[1]
+    .split(',')
+    .map((tag) => tag.trim())
+    .filter(Boolean)
+    .slice(0, 6);
+}
+
+function cleanupDocumentTitleV1(value) {
+  return value
+    .replace(/\s*(?:본문|내용|태그)\s*(?:은|는|:).*$/i, '')
+    .replace(/[.,"']+$/g, '')
+    .trim();
+}
+
+function resolveLocalScheduleCreateResponseV1(message, workspace) {
+  const normalizedMessage = message.trim();
+
+  if (!isExplicitScheduleCreateIntentV1(normalizedMessage)) {
+    return null;
+  }
+
+  const resolvedProject = resolveTaskProjectFromWorkspaceV1(normalizedMessage, workspace);
+  if (!resolvedProject) {
+    const recentProjectSuggestions = Array.isArray(workspace?.recentProjects)
+      ? workspace.recentProjects.slice(0, 3).map((project) => `${project.title} 일정 추가`)
+      : [];
+
+    return {
+      message: '어느 프로젝트에 일정을 만들까요?',
+      action: {
+        type: 'none',
+        projectId: null,
+        documentId: null,
+        path: null,
+        title: null,
+        description: null,
+        body: null,
+        status: null,
+        priority: null,
+        dueDate: null,
+        tags: null,
+        scheduleType: null,
+        day: null,
+        startTime: null,
+        endTime: null,
+        location: null,
+        note: null,
+      },
+      suggestions: recentProjectSuggestions.length > 0 ? recentProjectSuggestions : ['현재 프로젝트 일정 만들기'],
+      raw: '',
+    };
+  }
+
+  const title = extractScheduleTitleFromCreateIntentV1(normalizedMessage);
+  const day = extractWeekdayFromScheduleIntentV1(normalizedMessage);
+  const timeRange = extractTimeRangeFromScheduleIntentV1(normalizedMessage);
+
+  if (!title || !day || !timeRange) {
+    return {
+      message: '일정 제목, 요일, 시작/종료 시간을 알려주세요.',
+      action: {
+        type: 'none',
+        projectId: resolvedProject.id,
+        documentId: null,
+        path: null,
+        title: null,
+        description: null,
+        body: null,
+        status: null,
+        priority: null,
+        dueDate: null,
+        tags: null,
+        scheduleType: null,
+        day: null,
+        startTime: null,
+        endTime: null,
+        location: null,
+        note: null,
+      },
+      suggestions: [
+        `${resolvedProject.title} 일정 추가. 제목은 주간 미팅, 화요일 14:00-15:00`,
+        '제목은 실험 점검, 수요일 오후 2시부터 3시',
+      ],
+      raw: '',
+    };
+  }
+
+  return {
+    message: `"${resolvedProject.title}"에 일정 "${title}"를 추가할게요.`,
+    action: {
+      type: 'create_schedule',
+      projectId: resolvedProject.id,
+      documentId: null,
+      path: `/projects/${resolvedProject.id}/schedule`,
+      title,
+      description: null,
+      body: null,
+      status: null,
+      priority: null,
+      dueDate: null,
+      tags: null,
+      scheduleType: 'Project',
+      day,
+      startTime: timeRange.startTime,
+      endTime: timeRange.endTime,
+      location: extractScheduleLocationFromIntentV1(normalizedMessage),
+      note: extractScheduleNoteFromIntentV1(normalizedMessage),
+    },
+    suggestions: [
+      `${resolvedProject.title} 일정 보기`,
+      '다른 일정 추가',
+    ],
+    raw: '',
+  };
+}
+
+function isExplicitScheduleCreateIntentV1(message) {
+  const createHints = ['만들', '생성', '추가', '등록'];
+  return message.includes('일정') && createHints.some((hint) => message.includes(hint));
+}
+
+function extractScheduleTitleFromCreateIntentV1(message) {
+  const titleMatch = message.match(/(?:제목|일정명|이름)\s*(?:은|는|:)\s*["']?(.+?)["']?(?:[,.]|$)/i);
+  if (titleMatch?.[1]) {
+    return cleanupScheduleTitleV1(titleMatch[1]);
+  }
+
+  const quotedMatch = message.match(/["'](.+?)["']\s*일정/i);
+  if (quotedMatch?.[1]) {
+    return cleanupScheduleTitleV1(quotedMatch[1]);
+  }
+
+  return null;
+}
+
+function cleanupScheduleTitleV1(value) {
+  return value
+    .replace(/\s*(?:장소|메모)\s*(?:은|는|:).*$/i, '')
+    .trim()
+    .replace(/[.,"']+$/g, '');
+}
+
+function extractWeekdayFromScheduleIntentV1(message) {
+  const weekdayMap = [
+    ['월요일', 'Monday'],
+    ['화요일', 'Tuesday'],
+    ['수요일', 'Wednesday'],
+    ['목요일', 'Thursday'],
+    ['금요일', 'Friday'],
+    ['토요일', 'Saturday'],
+    ['일요일', 'Sunday'],
+    ['monday', 'Monday'],
+    ['tuesday', 'Tuesday'],
+    ['wednesday', 'Wednesday'],
+    ['thursday', 'Thursday'],
+    ['friday', 'Friday'],
+    ['saturday', 'Saturday'],
+    ['sunday', 'Sunday'],
+  ];
+
+  const lowered = message.toLowerCase();
+  const matched = weekdayMap.find(([token]) => lowered.includes(token));
+  return matched ? matched[1] : null;
+}
+
+function extractTimeRangeFromScheduleIntentV1(message) {
+  const rangeMatch = message.match(/(\d{1,2}:\d{2})\s*[-~]\s*(\d{1,2}:\d{2})/);
+  if (rangeMatch?.[1] && rangeMatch?.[2]) {
+    return {
+      startTime: padTimeValueV1(rangeMatch[1]),
+      endTime: padTimeValueV1(rangeMatch[2]),
+    };
+  }
+
+  const meridiemRangeMatch = message.match(/(오전|오후)\s*(\d{1,2})시(?:\s*(\d{1,2})분)?(?:부터|에서)?\s*(?:\s*)(오전|오후)?\s*(\d{1,2})시(?:\s*(\d{1,2})분)?/);
+  if (meridiemRangeMatch) {
+    const startTime = convertMeridiemToTimeV1(meridiemRangeMatch[1], meridiemRangeMatch[2], meridiemRangeMatch[3]);
+    const endTime = convertMeridiemToTimeV1(
+      meridiemRangeMatch[4] || meridiemRangeMatch[1],
+      meridiemRangeMatch[5],
+      meridiemRangeMatch[6],
+    );
+
+    return startTime && endTime ? { startTime, endTime } : null;
+  }
+
+  return null;
+}
+
+function padTimeValueV1(value) {
+  const [hours, minutes] = value.split(':');
+  return `${hours.padStart(2, '0')}:${minutes}`;
+}
+
+function convertMeridiemToTimeV1(meridiem, hourValue, minuteValue) {
+  let hours = Number(hourValue);
+  const minutes = String(Number(minuteValue ?? '0')).padStart(2, '0');
+
+  if (Number.isNaN(hours)) {
+    return null;
+  }
+
+  if (meridiem === '오후' && hours < 12) {
+    hours += 12;
+  }
+
+  if (meridiem === '오전' && hours === 12) {
+    hours = 0;
+  }
+
+  return `${String(hours).padStart(2, '0')}:${minutes}`;
+}
+
+function extractScheduleLocationFromIntentV1(message) {
+  const locationMatch = message.match(/장소\s*(?:은|는|:)\s*["']?(.+?)["']?(?:[,.]|$)/i);
+  return locationMatch?.[1]?.trim() ?? '';
+}
+
+function extractScheduleNoteFromIntentV1(message) {
+  const noteMatch = message.match(/(?:메모|비고)\s*(?:은|는|:)\s*["']?(.+?)["']?(?:$)/i);
+  return noteMatch?.[1]?.trim() ?? '';
+}
+
+function resolveLocalTaskStatusResponseV1(message, workspace) {
+  const normalizedMessage = message.trim();
+  const taskStatus = extractRequestedTaskStatusV1(normalizedMessage);
+
+  if (!taskStatus) {
+    return null;
+  }
+
+  const taskSummaries = Array.isArray(workspace?.taskSummaries) ? workspace.taskSummaries : [];
+  if (taskSummaries.length === 0) {
+    return null;
+  }
+
+  const resolvedProject = resolveTaskProjectFromWorkspaceV1(normalizedMessage, workspace);
+  const scopedTasks = resolvedProject
+    ? taskSummaries.filter((task) => task.projectId === resolvedProject.id)
+    : taskSummaries;
+  const matchedTask = findTaskSummaryByMessageV1(normalizedMessage, scopedTasks);
+
+  if (!matchedTask) {
+    return {
+      message: '어떤 작업 상태를 바꿀지 알려주세요.',
+      action: {
+        type: 'none',
+        projectId: resolvedProject?.id ?? null,
+        documentId: null,
+        taskId: null,
+        path: null,
+        title: null,
+        description: null,
+        body: null,
+        status: null,
+        priority: null,
+        dueDate: null,
+        tags: null,
+        scheduleType: null,
+        taskStatus: null,
+        day: null,
+        startTime: null,
+        endTime: null,
+        location: null,
+        note: null,
+      },
+      suggestions: scopedTasks.slice(0, 3).map((task) => `${task.title} 완료로 변경`),
+      raw: '',
+    };
+  }
+
+  return {
+    message: `"${matchedTask.title}" 작업 상태를 ${taskStatus}로 바꿀게요.`,
+    action: {
+      type: 'update_task_status',
+      projectId: matchedTask.projectId,
+      documentId: null,
+      taskId: matchedTask.id,
+      path: `/projects/${matchedTask.projectId}/tasks`,
+      title: null,
+      description: null,
+      body: null,
+      status: null,
+      priority: null,
+      dueDate: null,
+      tags: null,
+      scheduleType: null,
+      taskStatus,
+      day: null,
+      startTime: null,
+      endTime: null,
+      location: null,
+      note: null,
+    },
+    suggestions: [`${matchedTask.projectTitle} 작업 보드 보기`],
+    raw: '',
+  };
+}
+
+function extractRequestedTaskStatusV1(message) {
+  if (/완료|끝내|done|complete/i.test(message)) return 'Done';
+  if (/(리뷰|검토|review)/i.test(message)) return 'Review';
+  if (/진행중|진행 중|in progress/i.test(message)) return 'In Progress';
+  if (/할일|할 일|todo/i.test(message)) return 'Todo';
+  return null;
+}
+
+function findTaskSummaryByMessageV1(message, taskSummaries) {
+  const normalizedMessage = normalizeProjectLookupTextV1(message);
+
+  return (
+    taskSummaries.find((task) => normalizedMessage.includes(normalizeProjectLookupTextV1(task.title))) ??
+    taskSummaries.find((task) => normalizeProjectLookupTextV1(task.title).includes(normalizedMessage))
+  );
+}
+
+function resolveLocalTaskDeleteResponseV1(message, workspace) {
+  if (!isExplicitDeleteIntentV1(message) || !message.includes('작업')) {
+    return null;
+  }
+
+  const taskSummaries = Array.isArray(workspace?.taskSummaries) ? workspace.taskSummaries : [];
+  if (taskSummaries.length === 0) {
+    return null;
+  }
+
+  const resolvedProject = resolveTaskProjectFromWorkspaceV1(message, workspace);
+  const scopedTasks = resolvedProject
+    ? taskSummaries.filter((task) => task.projectId === resolvedProject.id)
+    : taskSummaries;
+  const matchedTask = findTaskSummaryByMessageV1(message, scopedTasks);
+
+  if (!matchedTask) {
+    return {
+      message: '어떤 작업을 삭제할지 알려주세요.',
+      action: emptyAssistantAction(),
+      suggestions: scopedTasks.slice(0, 3).map((task) => `${task.title} 작업 삭제`),
+      raw: '',
+    };
+  }
+
+  return {
+    message: `"${matchedTask.title}" 작업을 삭제할까요? 이 작업은 되돌릴 수 없습니다.`,
+    action: {
+      ...emptyAssistantAction(),
+      type: 'confirm_delete_task',
+      projectId: matchedTask.projectId,
+      taskId: matchedTask.id,
+      path: `/projects/${matchedTask.projectId}/tasks`,
+      title: matchedTask.title,
+    },
+    suggestions: ['삭제 진행', '취소'],
+    raw: '',
+  };
+}
+
+function resolveLocalDocumentDeleteResponseV1(message, workspace) {
+  if (!isExplicitDeleteIntentV1(message) || !message.includes('문서')) {
+    return null;
+  }
+
+  const documentSummaries = Array.isArray(workspace?.documentSummaries) ? workspace.documentSummaries : [];
+  if (documentSummaries.length === 0) {
+    return null;
+  }
+
+  const resolvedProject = resolveTaskProjectFromWorkspaceV1(message, workspace);
+  const scopedDocuments = resolvedProject
+    ? documentSummaries.filter((document) => document.projectId === resolvedProject.id)
+    : documentSummaries;
+  const matchedDocument = findDocumentSummaryByMessageV1(message, scopedDocuments);
+
+  if (!matchedDocument) {
+    return {
+      message: '어떤 문서를 삭제할지 알려주세요.',
+      action: emptyAssistantAction(),
+      suggestions: scopedDocuments.slice(0, 3).map((document) => `${document.title} 문서 삭제`),
+      raw: '',
+    };
+  }
+
+  return {
+    message: `"${matchedDocument.title}" 문서를 삭제할까요? 이 작업은 되돌릴 수 없습니다.`,
+    action: {
+      ...emptyAssistantAction(),
+      type: 'confirm_delete_document',
+      projectId: matchedDocument.projectId,
+      documentId: matchedDocument.id,
+      path: `/projects/${matchedDocument.projectId}/docs`,
+      title: matchedDocument.title,
+    },
+    suggestions: ['삭제 진행', '취소'],
+    raw: '',
+  };
+}
+
+function isExplicitDeleteIntentV1(message) {
+  return /(삭제|지워|없애|remove|delete)/i.test(message);
+}
+
+function findDocumentSummaryByMessageV1(message, documentSummaries) {
+  const normalizedMessage = normalizeProjectLookupTextV1(message);
+
+  return (
+    documentSummaries.find((document) => normalizedMessage.includes(normalizeProjectLookupTextV1(document.title))) ??
+    documentSummaries.find((document) => normalizeProjectLookupTextV1(document.title).includes(normalizedMessage))
+  );
+}
+
+function emptyAssistantAction() {
+  return {
+    type: 'none',
+    projectId: null,
+    documentId: null,
+    taskId: null,
+    path: null,
+    title: null,
+    description: null,
+    body: null,
+    status: null,
+    priority: null,
+    dueDate: null,
+    tags: null,
+    scheduleType: null,
+    taskStatus: null,
+    day: null,
+    startTime: null,
+    endTime: null,
+    location: null,
+    note: null,
+  };
+}
+
 function buildDynamicContext(workspace) {
   const recentProjectsBlock = Array.isArray(workspace.recentProjects) && workspace.recentProjects.length > 0
     ? workspace.recentProjects
@@ -642,13 +1405,39 @@ function parseAssistantResponse(rawContent) {
               ? 'navigate'
               : parsed.action?.type === 'create_project'
                 ? 'create_project'
+                : parsed.action?.type === 'create_task'
+                  ? 'create_task'
+                  : parsed.action?.type === 'create_document'
+                    ? 'create_document'
+                    : parsed.action?.type === 'create_schedule'
+                      ? 'create_schedule'
+                      : parsed.action?.type === 'update_task_status'
+                        ? 'update_task_status'
+                        : parsed.action?.type === 'confirm_delete_task'
+                          ? 'confirm_delete_task'
+                          : parsed.action?.type === 'confirm_delete_document'
+                            ? 'confirm_delete_document'
                 : 'none',
           projectId: typeof parsed.action?.projectId === 'string' ? parsed.action.projectId : null,
           documentId: typeof parsed.action?.documentId === 'string' ? parsed.action.documentId : null,
+          taskId: typeof parsed.action?.taskId === 'string' ? parsed.action.taskId : null,
           path: typeof parsed.action?.path === 'string' ? parsed.action.path : null,
           title: typeof parsed.action?.title === 'string' ? parsed.action.title.trim() : null,
           description: typeof parsed.action?.description === 'string' ? parsed.action.description.trim() : null,
+          body: typeof parsed.action?.body === 'string' ? parsed.action.body.trim() : null,
           status: normalizeProjectStatus(parsed.action?.status),
+          priority: normalizeTaskPriority(parsed.action?.priority),
+          dueDate: normalizeIsoDate(parsed.action?.dueDate),
+          tags: Array.isArray(parsed.action?.tags)
+            ? parsed.action.tags.filter((item) => typeof item === 'string').map((item) => item.trim()).filter(Boolean).slice(0, 6)
+            : null,
+          scheduleType: normalizeScheduleType(parsed.action?.scheduleType),
+          taskStatus: normalizeTaskStatus(parsed.action?.taskStatus),
+          day: normalizeWeekday(parsed.action?.day),
+          startTime: normalizeTimeValue(parsed.action?.startTime),
+          endTime: normalizeTimeValue(parsed.action?.endTime),
+          location: typeof parsed.action?.location === 'string' ? parsed.action.location.trim() : null,
+          note: typeof parsed.action?.note === 'string' ? parsed.action.note.trim() : null,
         },
         suggestions: Array.isArray(parsed.suggestions)
           ? parsed.suggestions.filter((item) => typeof item === 'string').slice(0, 4)
@@ -668,6 +1457,62 @@ function normalizeProjectStatus(value) {
   }
 
   return null;
+}
+
+function normalizeTaskPriority(value) {
+  if (value === 'Low' || value === 'Medium' || value === 'High' || value === 'Urgent') {
+    return value;
+  }
+
+  return null;
+}
+
+function normalizeIsoDate(value) {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  return /^\d{4}-\d{2}-\d{2}$/.test(value.trim()) ? value.trim() : null;
+}
+
+function normalizeScheduleType(value) {
+  if (value === 'Personal' || value === 'Lab' || value === 'Project') {
+    return value;
+  }
+
+  return null;
+}
+
+function normalizeTaskStatus(value) {
+  if (value === 'Todo' || value === 'In Progress' || value === 'Review' || value === 'Done') {
+    return value;
+  }
+
+  return null;
+}
+
+function normalizeWeekday(value) {
+  if (
+    value === 'Monday' ||
+    value === 'Tuesday' ||
+    value === 'Wednesday' ||
+    value === 'Thursday' ||
+    value === 'Friday' ||
+    value === 'Saturday' ||
+    value === 'Sunday'
+  ) {
+    return value;
+  }
+
+  return null;
+}
+
+function normalizeTimeValue(value) {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  return /^([01]\d|2[0-3]):[0-5]\d$/.test(value.trim()) ? value.trim() : null;
 }
 
 function extractJsonObjects(content) {

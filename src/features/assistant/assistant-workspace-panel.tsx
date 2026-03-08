@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import type { Document, Project, Schedule, Task } from '@/entities/models';
+import type { Document, Project, Schedule, ScheduleType, Task, TaskPriority, Weekday } from '@/entities/models';
 import {
   buildWorkspacePayload,
   requestAssistantResponse,
@@ -26,6 +26,12 @@ interface AssistantWorkspacePanelProps {
   activeDocumentId: string | null;
   recentProjectIds: string[];
   createProject: (input: { title: string; description: string; status: 'Planning' | 'Active' | 'Done' | 'Archived'; memberIds: string[] }) => string;
+  createDocument: (input: { projectId: string; title: string; body: string; tags: string[]; authorId: string; relatedTaskIds: string[] }) => string;
+  createTask: (input: { projectId: string; title: string; description: string; status: 'Todo' | 'In Progress' | 'Review' | 'Done'; priority: TaskPriority; assigneeId: string; dueDate: string; documentId?: string }) => void;
+  createSchedule: (input: { title: string; type: ScheduleType; projectId?: string; ownerId?: string; day: Weekday; startTime: string; endTime: string; location: string; note: string }) => void;
+  deleteDocument: (documentId: string) => void;
+  deleteTask: (taskId: string) => void;
+  updateTaskStatus: (taskId: string, status: 'Todo' | 'In Progress' | 'Review' | 'Done') => void;
   setActiveProjectContext: (projectId: string | null) => void;
   setActiveDocumentContext: (documentId: string | null) => void;
 }
@@ -44,6 +50,13 @@ interface PanelRect {
   height: number;
 }
 
+interface PendingAssistantAction {
+  kind: 'delete_task' | 'delete_document';
+  id: string;
+  projectId: string | null;
+  title: string;
+}
+
 function createMessage(role: AssistantMessage['role'], text: string, suggestions?: string[]): AssistantMessage {
   return {
     id: `${role}-${Math.random().toString(36).slice(2, 9)}`,
@@ -59,6 +72,20 @@ function clamp(value: number, min: number, max: number) {
 
 function normalizeProjectTitle(value: string) {
   return value.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function getDefaultTaskDueDate() {
+  const target = new Date();
+  target.setDate(target.getDate() + 7);
+  return target.toISOString().slice(0, 10);
+}
+
+function isConfirmationPrompt(value: string) {
+  return /^(예|네|응|확인|진행|삭제 진행|맞아|yes|confirm|ok)$/i.test(value.trim());
+}
+
+function isCancellationPrompt(value: string) {
+  return /^(아니오|아니요|취소|중지|stop|cancel|no)$/i.test(value.trim());
 }
 
 function buildQuickPrompts(args: {
@@ -151,6 +178,12 @@ export function AssistantWorkspacePanel({
   activeDocumentId,
   recentProjectIds,
   createProject,
+  createDocument,
+  createTask,
+  createSchedule,
+  deleteDocument,
+  deleteTask,
+  updateTaskStatus,
   setActiveProjectContext,
   setActiveDocumentContext,
 }: AssistantWorkspacePanelProps) {
@@ -179,6 +212,7 @@ export function AssistantWorkspacePanel({
   const [panelRect, setPanelRect] = useState<PanelRect>(() => getDefaultPanelRect());
   const [isLoading, setIsLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<PendingAssistantAction | null>(null);
   const [assistantMessages, setAssistantMessages] = useState<AssistantMessage[]>([
     createMessage('assistant', '프로젝트 이름이나 작업 의도를 입력하면 해당 워크스페이스로 바로 이동합니다.'),
   ]);
@@ -251,6 +285,57 @@ export function AssistantWorkspacePanel({
 
     const userMessage = createMessage('user', trimmedPrompt);
     setAssistantMessages((current) => [...current, userMessage].slice(-8));
+
+    if (pendingAction) {
+      if (isConfirmationPrompt(trimmedPrompt)) {
+        if (pendingAction.kind === 'delete_task') {
+          deleteTask(pendingAction.id);
+          if (pendingAction.projectId) {
+            setActiveProjectContext(pendingAction.projectId);
+            navigate(`/projects/${pendingAction.projectId}/tasks`);
+          }
+          setAssistantMessages((current) =>
+            [...current, createMessage('assistant', `"${pendingAction.title}" 작업을 삭제했습니다.`)].slice(-8),
+          );
+        } else {
+          deleteDocument(pendingAction.id);
+          setActiveDocumentContext(null);
+          if (pendingAction.projectId) {
+            setActiveProjectContext(pendingAction.projectId);
+            navigate(`/projects/${pendingAction.projectId}/docs`);
+          }
+          setAssistantMessages((current) =>
+            [...current, createMessage('assistant', `"${pendingAction.title}" 문서를 삭제했습니다.`)].slice(-8),
+          );
+        }
+
+        setPendingAction(null);
+        setStatusMessage(null);
+        return;
+      }
+
+      if (isCancellationPrompt(trimmedPrompt)) {
+        setPendingAction(null);
+        setAssistantMessages((current) =>
+          [...current, createMessage('assistant', '삭제 요청을 취소했습니다.')].slice(-8),
+        );
+        setStatusMessage(null);
+        return;
+      }
+
+      setAssistantMessages((current) =>
+        [
+          ...current,
+          createMessage('assistant', '삭제 확인이 필요합니다. "삭제 진행" 또는 "취소"로 답해주세요.', [
+            '삭제 진행',
+            '취소',
+          ]),
+        ].slice(-8),
+      );
+      setStatusMessage(null);
+      return;
+    }
+
     setIsLoading(true);
     setStatusMessage('LLM 응답을 불러오는 중입니다.');
 
@@ -312,6 +397,91 @@ export function AssistantWorkspacePanel({
           setActiveDocumentContext(null);
           navigate(`/projects/${createdProjectId}`);
         }
+      }
+
+      if (response.action.type === 'create_task' && response.action.title) {
+        const targetProjectId = response.action.projectId ?? activeProjectId;
+
+        if (targetProjectId) {
+          createTask({
+            projectId: targetProjectId,
+            title: response.action.title,
+            description: response.action.description || `${response.action.title} 작업입니다.`,
+            status: 'Todo',
+            priority: response.action.priority ?? 'Medium',
+            assigneeId: currentUserId ?? '',
+            dueDate: response.action.dueDate ?? getDefaultTaskDueDate(),
+          });
+
+          setActiveProjectContext(targetProjectId);
+          navigate(`/projects/${targetProjectId}/tasks`);
+        }
+      }
+
+      if (response.action.type === 'create_document' && response.action.title) {
+        const targetProjectId = response.action.projectId ?? activeProjectId;
+
+        if (targetProjectId && currentUserId) {
+          const createdDocumentId = createDocument({
+            projectId: targetProjectId,
+            title: response.action.title,
+            body: response.action.body || response.action.description || `${response.action.title} 문서 초안입니다.`,
+            tags: response.action.tags ?? [],
+            authorId: currentUserId,
+            relatedTaskIds: [],
+          });
+
+          setActiveProjectContext(targetProjectId);
+          setActiveDocumentContext(createdDocumentId);
+          navigate(`/projects/${targetProjectId}/docs/${createdDocumentId}`);
+        }
+      }
+
+      if (response.action.type === 'create_schedule' && response.action.title) {
+        const targetProjectId = response.action.projectId ?? activeProjectId;
+
+        if (targetProjectId && response.action.day && response.action.startTime && response.action.endTime) {
+          createSchedule({
+            title: response.action.title,
+            type: response.action.scheduleType ?? 'Project',
+            projectId: targetProjectId,
+            day: response.action.day,
+            startTime: response.action.startTime,
+            endTime: response.action.endTime,
+            location: response.action.location ?? '',
+            note: response.action.note ?? '',
+          });
+
+          setActiveProjectContext(targetProjectId);
+          navigate(`/projects/${targetProjectId}/schedule`);
+        }
+      }
+
+      if (response.action.type === 'update_task_status' && response.action.taskId && response.action.taskStatus) {
+        updateTaskStatus(response.action.taskId, response.action.taskStatus);
+
+        if (response.action.projectId) {
+          setActiveProjectContext(response.action.projectId);
+          navigate(`/projects/${response.action.projectId}/tasks`);
+        }
+      }
+
+      if (response.action.type === 'confirm_delete_task' && response.action.taskId && response.action.title) {
+        setPendingAction({
+          kind: 'delete_task',
+          id: response.action.taskId,
+          projectId: response.action.projectId,
+          title: response.action.title,
+        });
+      }
+
+      if (response.action.type === 'confirm_delete_document' && response.action.documentId && response.action.title) {
+        setPendingAction({
+          kind: 'delete_document',
+          id: response.action.documentId,
+          projectId: response.action.projectId,
+          title: response.action.title,
+        });
       }
 
       setStatusMessage(null);

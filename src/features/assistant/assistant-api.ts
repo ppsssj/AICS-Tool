@@ -1,4 +1,4 @@
-import type { Document, Project, ProjectStatus, Schedule, Task } from '@/entities/models';
+import type { Document, Project, ProjectStatus, Schedule, ScheduleType, Task, TaskPriority, TaskStatus, Weekday } from '@/entities/models';
 
 export interface AssistantHistoryItem {
   role: 'user' | 'assistant';
@@ -20,18 +20,55 @@ export interface AssistantWorkspacePayload {
     reviewTaskCount: number;
     scheduleCount: number;
   }>;
+  taskSummaries: Array<{
+    id: string;
+    projectId: string;
+    projectTitle: string;
+    title: string;
+    status: TaskStatus;
+    priority: TaskPriority;
+    dueDate: string;
+  }>;
+  documentSummaries: Array<{
+    id: string;
+    projectId: string;
+    projectTitle: string;
+    title: string;
+    updatedAt: string;
+  }>;
 }
 
 export interface AssistantServerResponse {
   message: string;
   action: {
-    type: 'none' | 'navigate' | 'create_project';
+    type:
+      | 'none'
+      | 'navigate'
+      | 'create_project'
+      | 'create_task'
+      | 'create_document'
+      | 'create_schedule'
+      | 'update_task_status'
+      | 'confirm_delete_task'
+      | 'confirm_delete_document';
     projectId: string | null;
     documentId: string | null;
+    taskId?: string | null;
     path: string | null;
     title?: string | null;
     description?: string | null;
+    body?: string | null;
     status?: ProjectStatus | null;
+    priority?: TaskPriority | null;
+    dueDate?: string | null;
+    tags?: string[] | null;
+    scheduleType?: ScheduleType | null;
+    taskStatus?: TaskStatus | null;
+    day?: Weekday | null;
+    startTime?: string | null;
+    endTime?: string | null;
+    location?: string | null;
+    note?: string | null;
   };
   suggestions: string[];
   raw?: string;
@@ -93,6 +130,15 @@ export function buildWorkspacePayload({
     ...projects.filter((project) => prioritizedProjectIds.has(project.id)),
     ...projects.filter((project) => !prioritizedProjectIds.has(project.id)).slice(0, 5),
   ].slice(0, 8);
+  const prioritizedProjectIdSet = new Set(prioritizedProjects.map((project) => project.id));
+  const prioritizedTasks = tasks
+    .filter((task) => prioritizedProjectIdSet.has(task.projectId))
+    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+    .slice(0, 16);
+  const prioritizedDocuments = documents
+    .filter((document) => prioritizedProjectIdSet.has(document.projectId))
+    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+    .slice(0, 12);
 
   return {
     currentRoute,
@@ -111,6 +157,22 @@ export function buildWorkspacePayload({
       openTaskCount: tasks.filter((task) => task.projectId === project.id && task.status !== 'Done').length,
       reviewTaskCount: tasks.filter((task) => task.projectId === project.id && task.status === 'Review').length,
       scheduleCount: schedules.filter((schedule) => schedule.projectId === project.id).length,
+    })),
+    taskSummaries: prioritizedTasks.map((task) => ({
+      id: task.id,
+      projectId: task.projectId,
+      projectTitle: projects.find((project) => project.id === task.projectId)?.title ?? task.projectId,
+      title: task.title,
+      status: task.status,
+      priority: task.priority,
+      dueDate: task.dueDate,
+    })),
+    documentSummaries: prioritizedDocuments.map((document) => ({
+      id: document.id,
+      projectId: document.projectId,
+      projectTitle: projects.find((project) => project.id === document.projectId)?.title ?? document.projectId,
+      title: document.title,
+      updatedAt: document.updatedAt,
     })),
   };
 }

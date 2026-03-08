@@ -87,6 +87,12 @@ export function AppLayout() {
 
   const currentUserId = useLabStore((state) => state.currentUserId);
   const createProject = useLabStore((state) => state.createProject);
+  const createDocument = useLabStore((state) => state.createDocument);
+  const createTask = useLabStore((state) => state.createTask);
+  const createSchedule = useLabStore((state) => state.createSchedule);
+  const deleteDocument = useLabStore((state) => state.deleteDocument);
+  const deleteTask = useLabStore((state) => state.deleteTask);
+  const updateTaskStatus = useLabStore((state) => state.updateTaskStatus);
   const documents = useLabStore((state) => state.documents);
   const logout = useLabStore((state) => state.logout);
   const projects = useLabStore((state) => state.projects);
@@ -323,6 +329,12 @@ export function AppLayout() {
 
       <AssistantWorkspacePanel
         createProject={createProject}
+        createDocument={createDocument}
+        createTask={createTask}
+        createSchedule={createSchedule}
+        deleteDocument={deleteDocument}
+        deleteTask={deleteTask}
+        updateTaskStatus={updateTaskStatus}
         currentUserId={currentUserId}
         activeDocumentId={activeDocumentId}
         activeProjectId={activeProjectId}
