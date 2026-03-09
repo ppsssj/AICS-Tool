@@ -157,3 +157,224 @@ select {
 ::selection {
   background: rgb(var(--theme-accent-100) / 0.72);
 }
+
+.app-panel-shell {
+  position: relative;
+  isolation: isolate;
+}
+
+.app-panel-shell--transitioning {
+  box-shadow:
+    0 26px 72px rgba(15, 23, 42, 0.12),
+    0 0 0 1px rgba(255, 255, 255, 0.22) inset;
+}
+
+.app-panel-depth-light {
+  background:
+    radial-gradient(circle at 18% 24%, rgba(var(--theme-accent-200), 0.22), transparent 0 24%),
+    radial-gradient(circle at 36% 18%, rgba(255, 255, 255, 0.36), transparent 0 18%);
+}
+
+.app-panel-nav-origin {
+  position: absolute;
+  left: var(--nav-origin-x);
+  top: var(--nav-origin-y);
+  width: var(--nav-origin-size);
+  height: var(--nav-origin-size);
+  border-radius: 9999px;
+  transform: translate(-50%, -50%) scale(0.16);
+  background:
+    radial-gradient(circle, rgba(var(--theme-accent-200), 0.34) 0%, rgba(var(--theme-accent-100), 0.18) 38%, rgba(255, 255, 255, 0) 72%);
+  filter: blur(4px);
+  opacity: 0;
+  animation: nav-origin-expand 560ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.app-panel-stage {
+  position: relative;
+  isolation: isolate;
+}
+
+.app-panel-view {
+  transform-origin: 50% 12%;
+  will-change: transform, opacity, filter;
+}
+
+.app-panel-view--current {
+  animation: panel-view-enter 420ms cubic-bezier(0.2, 0.9, 0.2, 1) both;
+}
+
+.app-panel-view--previous {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  overflow: hidden;
+  pointer-events: none;
+  animation: panel-view-exit 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes nav-origin-expand {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.16);
+  }
+
+  24% {
+    opacity: 0.72;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.24);
+  }
+}
+
+@keyframes panel-view-enter {
+  0% {
+    opacity: 0;
+    transform: scale(1.018) translateY(8px);
+    filter: blur(10px);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    filter: blur(0);
+  }
+}
+
+@keyframes panel-view-exit {
+  0% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    filter: blur(0);
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(0.985) translateY(-6px);
+    filter: blur(6px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-panel-nav-origin,
+  .app-panel-view--current,
+  .app-panel-view--previous {
+    animation: none;
+  }
+}
+
+.assistant-panel {
+  transform-origin: 50% 50%;
+  will-change: transform, opacity, filter;
+}
+
+.assistant-panel__flare {
+  pointer-events: none;
+  position: absolute;
+  left: var(--assistant-origin-x);
+  top: var(--assistant-origin-y);
+  width: 180px;
+  height: 180px;
+  border-radius: 9999px;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(circle, rgba(var(--theme-accent-200), 0.34) 0%, rgba(var(--theme-accent-100), 0.2) 34%, rgba(255, 255, 255, 0) 72%);
+  filter: blur(10px);
+  opacity: 0;
+}
+
+.assistant-panel--opening {
+  animation: assistant-panel-open 360ms cubic-bezier(0.2, 0.92, 0.24, 1) both;
+}
+
+.assistant-panel--opening .assistant-panel__flare {
+  animation: assistant-panel-flare-open 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.assistant-panel--closing {
+  animation: assistant-panel-close 360ms cubic-bezier(0.4, 0, 0.18, 1) both;
+}
+
+.assistant-panel--closing .assistant-panel__flare {
+  animation: assistant-panel-flare-close 360ms cubic-bezier(0.4, 0, 0.18, 1) both;
+}
+
+@keyframes assistant-panel-open {
+  0% {
+    opacity: 0;
+    transform:
+      translate3d(var(--assistant-enter-x), var(--assistant-enter-y), 0)
+      scale(0.08);
+    filter: blur(14px) saturate(1.08);
+  }
+
+  58% {
+    opacity: 1;
+    transform:
+      translate3d(calc(var(--assistant-enter-x) * -0.045), calc(var(--assistant-enter-y) * -0.045), 0)
+      scale(1.018);
+    filter: blur(1px) saturate(1.02);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+    filter: blur(0) saturate(1);
+  }
+}
+
+@keyframes assistant-panel-close {
+  0% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+    filter: blur(0) saturate(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform:
+      translate3d(var(--assistant-enter-x), var(--assistant-enter-y), 0)
+      scale(0.08);
+    filter: blur(14px) saturate(1.08);
+  }
+}
+
+@keyframes assistant-panel-flare-open {
+  0% {
+    opacity: 0.72;
+    transform: translate(-50%, -50%) scale(0.16);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(3.1);
+  }
+}
+
+@keyframes assistant-panel-flare-close {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(2.7);
+  }
+
+  24% {
+    opacity: 0.32;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.14);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .assistant-panel,
+  .assistant-panel__flare,
+  .assistant-panel--opening,
+  .assistant-panel--closing {
+    animation: none;
+    filter: none;
+    transform: none;
+  }
+}

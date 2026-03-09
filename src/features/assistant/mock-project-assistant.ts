@@ -1,6 +1,7 @@
 import type { Document, Project, Schedule, Task } from '@/entities/models';
+import type { AppTheme } from '@/shared/lib/themes';
 
-type AssistantSection = 'overview' | 'docs' | 'tasks' | 'schedule';
+type AssistantSection = 'overview' | 'docs' | 'tasks' | 'schedule' | 'members';
 
 interface AssistantState {
   projects: Project[];
@@ -16,11 +17,24 @@ interface AssistantProjectMatch {
   score: number;
 }
 
+interface AssistantDocumentMatch {
+  document: Document;
+  score: number;
+}
+
 export interface AssistantResponse {
   message: string;
   path?: string;
   projectId?: string | null;
   documentId?: string | null;
+  theme?: AppTheme;
+  shouldLogout?: boolean;
+  suggestions?: string[];
+}
+
+interface GlobalRouteMatch {
+  path: string;
+  message: string;
   suggestions?: string[];
 }
 
@@ -85,6 +99,10 @@ function detectSection(input: string): AssistantSection {
     return 'schedule';
   }
 
+  if (normalized.includes('멤버') || normalized.includes('구성원') || normalized.includes('member') || normalized.includes('team')) {
+    return 'members';
+  }
+
   return 'overview';
 }
 
@@ -138,7 +156,171 @@ function buildProjectPath(projectId: string, section: AssistantSection): string 
     return `/projects/${projectId}/schedule`;
   }
 
+  if (section === 'members') {
+    return `/projects/${projectId}/members`;
+  }
+
   return `/projects/${projectId}`;
+}
+
+function buildDocumentPath(projectId: string, documentId: string): string {
+  return `/projects/${projectId}/docs/${documentId}`;
+}
+
+function resolveGlobalRoute(input: string): GlobalRouteMatch | null {
+  const normalized = normalizeText(input);
+
+  if (!normalized) {
+    return null;
+  }
+
+  if (normalized.includes('대시보드') || normalized === 'dashboard' || normalized.includes('홈')) {
+    return {
+      path: '/dashboard',
+      message: '대시보드로 이동합니다.',
+      suggestions: ['프로젝트 목록 열기', '캘린더 열기'],
+    };
+  }
+
+  if (
+    normalized.includes('프로젝트목록') ||
+    normalized.includes('전체프로젝트') ||
+    normalized === '프로젝트' ||
+    normalized === 'projects'
+  ) {
+    return {
+      path: '/projects',
+      message: '프로젝트 목록으로 이동합니다.',
+      suggestions: ['대시보드 열기', '캘린더 열기'],
+    };
+  }
+
+  if (normalized.includes('캘린더') || normalized.includes('일정페이지') || normalized === 'calendar') {
+    return {
+      path: '/calendar',
+      message: '캘린더로 이동합니다.',
+      suggestions: ['오늘 일정 보기', '프로젝트 일정 열기'],
+    };
+  }
+
+  if (normalized.includes('설정') || normalized.includes('환경설정') || normalized === 'settings') {
+    return {
+      path: '/settings',
+      message: '설정 페이지로 이동합니다.',
+      suggestions: ['테마 바꾸기', '프로필 확인'],
+    };
+  }
+
+  return null;
+}
+
+function resolveThemeChange(input: string): AssistantResponse | null {
+  const normalized = normalizeText(input);
+  const wantsThemeChange =
+    normalized.includes('테마') ||
+    normalized.includes('theme') ||
+    normalized.includes('바꿔') ||
+    normalized.includes('변경') ||
+    normalized.includes('적용');
+
+  if (!wantsThemeChange) {
+    return null;
+  }
+
+  const targetTheme: AppTheme | null =
+    normalized.includes('미스트') || normalized.includes('mist')
+      ? 'mist'
+      : normalized.includes('스카이') || normalized.includes('sky')
+        ? 'sky'
+        : normalized.includes('샌드') || normalized.includes('sand')
+          ? 'sand'
+          : normalized.includes('실버') || normalized.includes('silver') || normalized.includes('기본')
+            ? 'silver'
+            : null;
+
+  if (!targetTheme) {
+    return {
+      message: '변경할 테마를 알려주세요. 실버, 미스트, 스카이, 샌드 중에서 선택할 수 있습니다.',
+      suggestions: ['미스트 테마로 바꿔줘', '스카이 테마 적용', '기본 테마로 변경'],
+    };
+  }
+
+  const themeLabel =
+    targetTheme === 'mist' ? '미스트' : targetTheme === 'sky' ? '스카이' : targetTheme === 'sand' ? '샌드' : '실버 시스템';
+
+  return {
+    message: `${themeLabel} 테마로 변경합니다.`,
+    theme: targetTheme,
+    suggestions: ['대시보드 열기', '설정 페이지 열기'],
+  };
+}
+
+function resolveLogoutIntent(input: string): AssistantResponse | null {
+  const normalized = normalizeText(input);
+
+  if (!/(로그아웃|logout|signout|signoff|세션종료)/i.test(normalized)) {
+    return null;
+  }
+
+  return {
+    message: '현재 세션을 종료하고 로그인 화면으로 이동합니다.',
+    shouldLogout: true,
+    suggestions: ['다시 로그인', '설정 페이지 열기'],
+  };
+}
+
+function scoreDocument(document: Document, query: string, projects: Project[], recentProjectIds: string[]): number {
+  const documentTitle = normalizeText(document.title);
+  const normalizedQuery = normalizeText(query);
+
+  if (!normalizedQuery) {
+    return 0;
+  }
+
+  let score = 0;
+
+  if (documentTitle === normalizedQuery) {
+    score += 140;
+  }
+
+  if (documentTitle.includes(normalizedQuery)) {
+    score += 90;
+  }
+
+  const queryTokens = tokenizeText(query);
+  score += queryTokens.filter((token) => normalizeText(document.title).includes(normalizeText(token))).length * 18;
+
+  const projectRecentBonus = recentProjectIds.indexOf(document.projectId);
+  if (projectRecentBonus !== -1) {
+    score += 12 - projectRecentBonus;
+  }
+
+  const project = projects.find((item) => item.id === document.projectId);
+  if (project && normalizedQuery.includes(normalizeText(project.title))) {
+    score += 20;
+  }
+
+  return score;
+}
+
+function rankDocuments(
+  documents: Document[],
+  query: string,
+  projects: Project[],
+  recentProjectIds: string[],
+): AssistantDocumentMatch[] {
+  return documents
+    .map((document) => ({
+      document,
+      score: scoreDocument(document, query, projects, recentProjectIds),
+    }))
+    .filter((item) => item.score > 0)
+    .sort((left, right) => right.score - left.score);
+}
+
+function buildDocumentSummary(document: Document, state: AssistantState): string {
+  const project = state.projects.find((item) => item.id === document.projectId);
+  return `"${document.title}" 문서를 엽니다.${project ? ` ${project.title} 프로젝트 문서입니다.` : ''}`;
 }
 
 function buildProjectSummary(project: Project, state: AssistantState): string {
@@ -174,6 +356,16 @@ export function resolveAssistantPrompt(input: string, state: AssistantState): As
   }
 
   const section = detectSection(trimmedInput);
+  const logoutIntent = resolveLogoutIntent(trimmedInput);
+  if (logoutIntent) {
+    return logoutIntent;
+  }
+
+  const themeChange = resolveThemeChange(trimmedInput);
+  if (themeChange) {
+    return themeChange;
+  }
+
   const usesCurrentContext =
     /이프로젝트|현재프로젝트|여기|현재컨텍스트|이작업공간|현재작업공간/.test(normalizeText(trimmedInput));
 
@@ -194,6 +386,27 @@ export function resolveAssistantPrompt(input: string, state: AssistantState): As
   }
 
   const query = deriveProjectQuery(trimmedInput);
+  const documentIntent = /(문서|doc|docs|파일|프로토콜|회의록|초안|보고서)/i.test(trimmedInput);
+  const documentMatches = rankDocuments(state.documents, query || trimmedInput, state.projects, state.recentProjectIds);
+
+  if (documentMatches.length >= 2 && documentMatches[0].score - documentMatches[1].score < 20 && documentIntent) {
+    return {
+      message: '열 수 있는 문서 후보가 여러 개입니다. 아래 문서 중 하나를 선택해 주세요.',
+      suggestions: documentMatches.slice(0, 3).map((item) => `${item.document.title} 열기`),
+    };
+  }
+
+  if (documentMatches.length >= 1 && (documentIntent || documentMatches[0].score >= 90)) {
+    const match = documentMatches[0].document;
+    return {
+      message: buildDocumentSummary(match, state),
+      path: buildDocumentPath(match.projectId, match.id),
+      projectId: match.projectId,
+      documentId: match.id,
+      suggestions: [`${match.title} 관련 작업 보기`, `${state.projects.find((project) => project.id === match.projectId)?.title ?? '프로젝트'} 열기`],
+    };
+  }
+
   const matches = rankProjects(state.projects, query, state.recentProjectIds);
 
   if (matches.length >= 2 && matches[0].score - matches[1].score < 20) {
@@ -209,8 +422,17 @@ export function resolveAssistantPrompt(input: string, state: AssistantState): As
     };
   }
 
+  const globalRoute = resolveGlobalRoute(trimmedInput);
+  if (globalRoute) {
+    return {
+      message: globalRoute.message,
+      path: globalRoute.path,
+      suggestions: globalRoute.suggestions,
+    };
+  }
+
   const currentProject = resolveCurrentProject(state);
-  const genericWorkflowIntent = /(문서|작업|태스크|일정|스케줄|calendar|docs|task|review|board|workspace)/i.test(trimmedInput);
+  const genericWorkflowIntent = /(문서|작업|태스크|일정|스케줄|calendar|docs|task|review|board|workspace|멤버|구성원|member|team)/i.test(trimmedInput);
 
   if (genericWorkflowIntent && currentProject) {
     return {

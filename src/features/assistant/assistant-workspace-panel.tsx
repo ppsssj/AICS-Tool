@@ -7,6 +7,7 @@ import {
   type AssistantHistoryItem,
 } from '@/features/assistant/assistant-api';
 import { resolveAssistantPrompt } from '@/features/assistant/mock-project-assistant';
+import type { AppTheme } from '@/shared/lib/themes';
 import { cn } from '@/shared/lib/cn';
 import { Button } from '@/shared/ui/button';
 
@@ -15,6 +16,7 @@ const MIN_PANEL_WIDTH = 320;
 const MIN_PANEL_HEIGHT = 360;
 const DEFAULT_PANEL_WIDTH = 420;
 const DEFAULT_PANEL_HEIGHT = 560;
+const PANEL_TRANSITION_MS = 360;
 
 interface AssistantWorkspacePanelProps {
   projects: Project[];
@@ -32,6 +34,8 @@ interface AssistantWorkspacePanelProps {
   deleteDocument: (documentId: string) => void;
   deleteTask: (taskId: string) => void;
   updateTaskStatus: (taskId: string, status: 'Todo' | 'In Progress' | 'Review' | 'Done') => void;
+  logout: () => void;
+  setAppTheme: (theme: AppTheme) => void;
   setActiveProjectContext: (projectId: string | null) => void;
   setActiveDocumentContext: (documentId: string | null) => void;
 }
@@ -55,6 +59,13 @@ interface PendingAssistantAction {
   id: string;
   projectId: string | null;
   title: string;
+}
+
+type AssistantPanelPhase = 'closed' | 'opening' | 'open' | 'closing';
+
+interface PanelOrigin {
+  x: number;
+  y: number;
 }
 
 function createMessage(role: AssistantMessage['role'], text: string, suggestions?: string[]): AssistantMessage {
@@ -184,11 +195,15 @@ export function AssistantWorkspacePanel({
   deleteDocument,
   deleteTask,
   updateTaskStatus,
+  logout,
+  setAppTheme,
   setActiveProjectContext,
   setActiveDocumentContext,
 }: AssistantWorkspacePanelProps) {
   const location = useLocation();
   const navigate = useNavigate();
+  const toggleButtonRef = useRef<HTMLButtonElement | null>(null);
+  const panelTransitionTimerRef = useRef<number | null>(null);
   const interactionRef = useRef<
     | {
         type: 'move';
@@ -207,9 +222,13 @@ export function AssistantWorkspacePanel({
     | null
   >(null);
 
-  const [assistantOpen, setAssistantOpen] = useState(false);
+  const [panelPhase, setPanelPhase] = useState<AssistantPanelPhase>('closed');
   const [assistantInput, setAssistantInput] = useState('');
   const [panelRect, setPanelRect] = useState<PanelRect>(() => getDefaultPanelRect());
+  const [panelOrigin, setPanelOrigin] = useState<PanelOrigin>({
+    x: DEFAULT_PANEL_WIDTH - 56,
+    y: DEFAULT_PANEL_HEIGHT - 56,
+  });
   const [isLoading, setIsLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAssistantAction | null>(null);
@@ -218,6 +237,8 @@ export function AssistantWorkspacePanel({
   ]);
 
   const activeProject = projects.find((project) => project.id === activeProjectId) ?? null;
+  const assistantOpen = panelPhase === 'opening' || panelPhase === 'open';
+  const isPanelMounted = panelPhase !== 'closed';
   const quickPrompts = buildQuickPrompts({
     projects,
     recentProjectIds,
@@ -232,6 +253,15 @@ export function AssistantWorkspacePanel({
     window.addEventListener('resize', handleViewportResize);
     return () => window.removeEventListener('resize', handleViewportResize);
   }, []);
+
+  useEffect(
+    () => () => {
+      if (panelTransitionTimerRef.current !== null) {
+        window.clearTimeout(panelTransitionTimerRef.current);
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     function handlePointerMove(event: PointerEvent) {
@@ -343,6 +373,14 @@ export function AssistantWorkspacePanel({
       role: message.role,
       text: message.text,
     }));
+    const localResolved = resolveAssistantPrompt(trimmedPrompt, {
+      projects,
+      documents,
+      tasks,
+      schedules,
+      activeProjectId,
+      recentProjectIds,
+    });
 
     try {
       const response = await requestAssistantResponse({
@@ -359,21 +397,51 @@ export function AssistantWorkspacePanel({
           schedules,
         }),
       });
+      const shouldUseLocalNavigationFallback =
+        response.action.type === 'none' &&
+        !response.action.path &&
+        Boolean(localResolved.path);
+      const shouldUseLocalExecutionFallback =
+        response.action.type === 'none' &&
+        !response.action.path &&
+        (Boolean(localResolved.path) || Boolean(localResolved.theme) || Boolean(localResolved.shouldLogout));
+      const navigationProjectId = shouldUseLocalNavigationFallback
+        ? (localResolved.projectId ?? null)
+        : response.action.projectId;
+      const navigationDocumentId = shouldUseLocalNavigationFallback
+        ? (localResolved.documentId ?? null)
+        : response.action.documentId;
+      const navigationPath = shouldUseLocalNavigationFallback
+        ? localResolved.path ?? null
+        : response.action.path;
+      const assistantMessage = shouldUseLocalExecutionFallback ? localResolved.message : response.message;
+      const assistantSuggestions = shouldUseLocalExecutionFallback
+        ? (localResolved.suggestions ?? response.suggestions)
+        : response.suggestions;
 
       setAssistantMessages((current) =>
-        [...current, createMessage('assistant', response.message, response.suggestions)].slice(-8),
+        [...current, createMessage('assistant', assistantMessage, assistantSuggestions)].slice(-8),
       );
 
-      if (response.action.projectId !== null) {
-        setActiveProjectContext(response.action.projectId);
+      if (navigationProjectId !== null) {
+        setActiveProjectContext(navigationProjectId);
       }
 
-      if (response.action.documentId !== null) {
-        setActiveDocumentContext(response.action.documentId);
+      if (navigationDocumentId !== null) {
+        setActiveDocumentContext(navigationDocumentId);
       }
 
-      if (response.action.type === 'navigate' && response.action.path) {
-        navigate(response.action.path);
+      if ((response.action.type === 'navigate' && response.action.path) || shouldUseLocalNavigationFallback) {
+        navigate(navigationPath!);
+      }
+
+      if (shouldUseLocalExecutionFallback && localResolved.theme) {
+        setAppTheme(localResolved.theme);
+      }
+
+      if (shouldUseLocalExecutionFallback && localResolved.shouldLogout) {
+        logout();
+        navigate('/login');
       }
 
       if (response.action.type === 'create_project' && response.action.title) {
@@ -507,6 +575,16 @@ export function AssistantWorkspacePanel({
         setActiveDocumentContext(fallback.documentId);
       }
 
+      if (fallback.theme) {
+        setAppTheme(fallback.theme);
+      }
+
+      if (fallback.shouldLogout) {
+        logout();
+        navigate('/login');
+        return;
+      }
+
       if (fallback.path) {
         navigate(fallback.path);
       }
@@ -560,17 +638,68 @@ export function AssistantWorkspacePanel({
     setPanelRect(getDefaultPanelRect());
   }
 
+  function syncPanelOrigin() {
+    const buttonRect = toggleButtonRef.current?.getBoundingClientRect();
+
+    if (!buttonRect) {
+      return;
+    }
+
+    setPanelOrigin({
+      x: buttonRect.left + buttonRect.width / 2 - panelRect.x,
+      y: buttonRect.top + buttonRect.height / 2 - panelRect.y,
+    });
+  }
+
+  function openAssistantPanel() {
+    syncPanelOrigin();
+
+    if (panelTransitionTimerRef.current !== null) {
+      window.clearTimeout(panelTransitionTimerRef.current);
+    }
+
+    setPanelPhase('opening');
+    panelTransitionTimerRef.current = window.setTimeout(() => {
+      setPanelPhase('open');
+      panelTransitionTimerRef.current = null;
+    }, PANEL_TRANSITION_MS);
+  }
+
+  function closeAssistantPanel() {
+    syncPanelOrigin();
+
+    if (panelTransitionTimerRef.current !== null) {
+      window.clearTimeout(panelTransitionTimerRef.current);
+    }
+
+    setPanelPhase('closing');
+    panelTransitionTimerRef.current = window.setTimeout(() => {
+      setPanelPhase('closed');
+      panelTransitionTimerRef.current = null;
+    }, PANEL_TRANSITION_MS);
+  }
+
+  function toggleAssistantPanel() {
+    if (assistantOpen) {
+      closeAssistantPanel();
+      return;
+    }
+
+    openAssistantPanel();
+  }
+
   return (
     <>
       <div className="fixed bottom-6 right-6 z-40">
         <button
+          ref={toggleButtonRef}
           className={cn(
             'group inline-flex items-center gap-3 rounded-full border px-4 py-3 text-sm font-semibold tracking-[-0.01em] shadow-[0_18px_40px_rgba(15,23,42,0.16)] backdrop-blur-md transition-all duration-200',
             assistantOpen
               ? 'border-[rgb(var(--theme-accent-200)_/_0.92)] bg-[rgb(var(--theme-accent-500)_/_0.95)] text-white'
               : 'border-white/80 bg-white/90 text-slate-800 hover:-translate-y-0.5 hover:border-slate-200 hover:bg-white',
           )}
-          onClick={() => setAssistantOpen((current) => !current)}
+          onClick={toggleAssistantPanel}
           type="button"
         >
           <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white/18 text-base shadow-[inset_0_1px_0_rgba(255,255,255,0.25)]">
@@ -580,17 +709,27 @@ export function AssistantWorkspacePanel({
         </button>
       </div>
 
-      {assistantOpen ? (
+      {isPanelMounted ? (
         <section
           aria-label="AI workspace panel"
-          className="fixed z-50 overflow-hidden rounded-[28px] border border-white/75 bg-[rgba(255,255,255,0.94)] text-slate-900 shadow-[0_30px_80px_rgba(15,23,42,0.18)] backdrop-blur-xl"
+          className={cn(
+            'assistant-panel fixed z-50 overflow-hidden rounded-[28px] border border-white/75 bg-[rgba(255,255,255,0.94)] text-slate-900 shadow-[0_30px_80px_rgba(15,23,42,0.18)] backdrop-blur-xl',
+            panelPhase === 'opening' && 'assistant-panel--opening',
+            panelPhase === 'open' && 'assistant-panel--open',
+            panelPhase === 'closing' && 'assistant-panel--closing',
+          )}
           style={{
             width: `${panelRect.width}px`,
             height: `${panelRect.height}px`,
             left: `${panelRect.x}px`,
             top: `${panelRect.y}px`,
+            ['--assistant-origin-x' as string]: `${panelOrigin.x}px`,
+            ['--assistant-origin-y' as string]: `${panelOrigin.y}px`,
+            ['--assistant-enter-x' as string]: `${panelOrigin.x - panelRect.width / 2}px`,
+            ['--assistant-enter-y' as string]: `${panelOrigin.y - panelRect.height / 2}px`,
           }}
         >
+          <div className="assistant-panel__flare" />
           <div className="flex h-full flex-col" onPointerDown={handlePanelMoveStart} style={{ touchAction: 'none' }}>
             <div className="flex cursor-move items-start justify-between gap-4 border-b border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(248,250,252,0.9))] px-5 py-4">
               <div className="min-w-0">
@@ -612,7 +751,7 @@ export function AssistantWorkspacePanel({
                 <button
                   aria-label="Close AI workspace"
                   className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200/80 bg-white text-slate-500 transition hover:border-slate-300 hover:text-slate-900"
-                  onClick={() => setAssistantOpen(false)}
+                  onClick={closeAssistantPanel}
                   type="button"
                 >
                   ×
