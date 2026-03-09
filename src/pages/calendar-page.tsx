@@ -958,7 +958,6 @@ export function CalendarPage() {
     <div className="space-y-8">
       <PageHeader
         title="캘린더"
-        description="월간 개요, 주간 조율, 일간 시간표를 분리해 연구실 일정과 개인 제약을 함께 확인합니다."
         actions={
           <>
             <Button variant="secondary" onClick={() => setShowTimetableModal(true)}>

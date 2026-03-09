@@ -373,8 +373,7 @@ export function DashboardPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Dashboard"
-        description="This week: focus on urgent work, review waiting, and coordination mismatches."
+        title="대시보드"
       />
 
       <Card className="overflow-hidden border-slate-200/70 bg-[linear-gradient(135deg,rgba(255,255,255,0.97),rgba(245,247,252,0.94))]">

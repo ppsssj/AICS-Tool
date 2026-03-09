@@ -111,14 +111,13 @@ export function ProjectsPage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <PageHeader
-        title="Projects"
-        description="Scan project health, workload pressure, and the next place that needs coordination."
+        title="프로젝트"
         actions={<Button onClick={handleOpenCreate}>Create project</Button>}
       />
 
-      <div className="grid gap-5 xl:grid-cols-2">
+      <div className="grid gap-4 xl:grid-cols-2">
         {projectHealth.map((item) => {
           const headline =
             item.overdue.length > 0
@@ -139,8 +138,8 @@ export function ProjectsPage() {
           ].filter(Boolean);
 
           return (
-            <Card key={item.project.id} className="group flex flex-col gap-5 overflow-hidden border-slate-200/70 p-0">
-              <div className="border-b border-slate-200/80 bg-slate-50/70 px-6 py-4">
+            <Card key={item.project.id} className="group flex flex-col gap-4 overflow-hidden border-slate-200/70 p-0">
+              <div className="border-b border-slate-200/80 bg-slate-50/70 px-5 py-3.5">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge tone={getProjectTone(item.project)}>{projectStatusLabels[item.project.status]}</Badge>
@@ -154,17 +153,17 @@ export function ProjectsPage() {
                 </div>
               </div>
 
-              <div className="px-6">
-                <h2 className="text-[24px] font-semibold tracking-[-0.03em] text-slate-950">
+              <div className="px-5">
+                <h2 className="text-[22px] font-semibold tracking-[-0.03em] text-slate-950">
                   {item.project.title}
                 </h2>
-                <p className="mt-3 text-[19px] font-semibold tracking-[-0.02em] text-slate-900">
+                <p className="mt-2 text-[17px] font-semibold tracking-[-0.02em] text-slate-900">
                   {headline}
                 </p>
-                <p className="mt-2 text-sm leading-6 text-slate-500">{item.project.description}</p>
+                <p className="mt-1.5 text-sm leading-6 text-slate-500">{item.project.description}</p>
               </div>
 
-              <div className="grid gap-4 px-6 md:grid-cols-[1.1fr_0.9fr]">
+              <div className="grid gap-3 px-5 md:grid-cols-[1.1fr_0.9fr]">
                 <div className="rounded-[22px] border border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(246,248,252,0.92))] p-4">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
                     Operational signals
@@ -216,7 +215,7 @@ export function ProjectsPage() {
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200/80 px-6 py-5">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200/80 px-5 py-4">
                 <div className="flex flex-wrap gap-2">
                   <Link
                     className="inline-flex items-center justify-center rounded-[14px] border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
