@@ -7,6 +7,7 @@ This project now has a minimal backend layer for the lab workflow domain.
 - Entry point: `server.mjs`
 - New backend routes: `backend/routes/lab-api.mjs`
 - Service layer: `backend/services/lab-service.mjs`
+- Repository layer: `backend/repositories/lab-repository.mjs`
 - File-based persistence: `backend/data/store.mjs`
 - Seed data source: `backend/data/seed.mjs`
 - Request validation: `backend/lib/validation.mjs`
@@ -16,6 +17,7 @@ The backend uses a JSON file store (`backend/data/lab-data.json`) that is create
 - route handling
 - input validation
 - service-level business rules
+- repository abstraction
 - persistence
 - domain consistency between projects, tasks, documents, and schedules
 

@@ -1,52 +1,25 @@
-import {
-  createDocument,
-  createProject,
-  createSchedule,
-  createTask,
-  createTimetableBlock,
-  deleteDocument,
-  deleteProject,
-  deleteSchedule,
-  deleteTask,
-  getBootstrapData,
-  getDocument,
-  getProject,
-  getProjectBundle,
-  getProjectDocuments,
-  getProjectSchedules,
-  getProjects,
-  getProjectTasks,
-  getSchedule,
-  getTask,
-  getUser,
-  getUsers,
-  updateDocument,
-  updateProject,
-  updateSchedule,
-  updateTask,
-  updateUserRole,
-} from '../data/store.mjs';
 import { HttpError } from '../lib/http.mjs';
+import { labRepository } from '../repositories/lab-repository.mjs';
 
 export function getLabBootstrap() {
-  return getBootstrapData();
+  return labRepository.getBootstrapData();
 }
 
 export function listUsers() {
-  return getUsers();
+  return labRepository.getUsers();
 }
 
 export function listProjects() {
-  return getProjects();
+  return labRepository.getProjects();
 }
 
 export function createProjectRecord(payload) {
   assertUsersExist(payload.memberIds);
-  return createProject(payload);
+  return labRepository.createProject(payload);
 }
 
 export function getProjectBundleRecord(projectId) {
-  const bundle = getProjectBundle(projectId);
+  const bundle = labRepository.getProjectBundle(projectId);
   if (!bundle) {
     throw new HttpError(404, 'Project not found.');
   }
@@ -55,7 +28,7 @@ export function getProjectBundleRecord(projectId) {
 }
 
 export function updateProjectRecord(projectId, patch) {
-  const project = getProject(projectId);
+  const project = labRepository.getProject(projectId);
   if (!project) {
     throw new HttpError(404, 'Project not found.');
   }
@@ -64,18 +37,18 @@ export function updateProjectRecord(projectId, patch) {
     assertUsersExist(patch.memberIds);
   }
 
-  return updateProject(projectId, patch);
+  return labRepository.updateProject(projectId, patch);
 }
 
 export function deleteProjectRecord(projectId) {
-  if (!deleteProject(projectId)) {
+  if (!labRepository.deleteProject(projectId)) {
     throw new HttpError(404, 'Project not found.');
   }
 }
 
 export function listProjectTasks(projectId) {
   assertProjectExists(projectId);
-  return getProjectTasks(projectId);
+  return labRepository.getProjectTasks(projectId);
 }
 
 export function createProjectTaskRecord(projectId, payload) {
@@ -86,11 +59,11 @@ export function createProjectTaskRecord(projectId, payload) {
     assertDocumentBelongsToProject(payload.documentId, projectId);
   }
 
-  return createTask(projectId, payload);
+  return labRepository.createTask(projectId, payload);
 }
 
 export function updateTaskRecord(taskId, patch) {
-  const task = getTask(taskId);
+  const task = labRepository.getTask(taskId);
   if (!task) {
     throw new HttpError(404, 'Task not found.');
   }
@@ -103,18 +76,18 @@ export function updateTaskRecord(taskId, patch) {
     assertDocumentBelongsToProject(patch.documentId, task.projectId);
   }
 
-  return updateTask(taskId, patch);
+  return labRepository.updateTask(taskId, patch);
 }
 
 export function deleteTaskRecord(taskId) {
-  if (!deleteTask(taskId)) {
+  if (!labRepository.deleteTask(taskId)) {
     throw new HttpError(404, 'Task not found.');
   }
 }
 
 export function listProjectDocuments(projectId) {
   assertProjectExists(projectId);
-  return getProjectDocuments(projectId);
+  return labRepository.getProjectDocuments(projectId);
 }
 
 export function createProjectDocumentRecord(projectId, payload) {
@@ -122,11 +95,11 @@ export function createProjectDocumentRecord(projectId, payload) {
   assertUserExists(payload.authorId);
   assertTasksBelongToProject(payload.relatedTaskIds, projectId);
 
-  return createDocument(projectId, payload);
+  return labRepository.createDocument(projectId, payload);
 }
 
 export function updateDocumentRecord(documentId, patch) {
-  const document = getDocument(documentId);
+  const document = labRepository.getDocument(documentId);
   if (!document) {
     throw new HttpError(404, 'Document not found.');
   }
@@ -139,11 +112,11 @@ export function updateDocumentRecord(documentId, patch) {
     assertTasksBelongToProject(patch.relatedTaskIds, document.projectId);
   }
 
-  return updateDocument(documentId, patch);
+  return labRepository.updateDocument(documentId, patch);
 }
 
 export function deleteDocumentRecord(documentId) {
-  if (!deleteDocument(documentId)) {
+  if (!labRepository.deleteDocument(documentId)) {
     throw new HttpError(404, 'Document not found.');
   }
 }
@@ -157,12 +130,12 @@ export function createStandaloneScheduleRecord(payload) {
     assertProjectExists(payload.projectId);
   }
 
-  return createSchedule(payload);
+  return labRepository.createSchedule(payload);
 }
 
 export function listProjectSchedules(projectId) {
   assertProjectExists(projectId);
-  return getProjectSchedules(projectId);
+  return labRepository.getProjectSchedules(projectId);
 }
 
 export function createProjectScheduleRecord(projectId, payload) {
@@ -172,11 +145,11 @@ export function createProjectScheduleRecord(projectId, payload) {
     assertUserExists(payload.ownerId);
   }
 
-  return createSchedule({ ...payload, projectId });
+  return labRepository.createSchedule({ ...payload, projectId });
 }
 
 export function updateScheduleRecord(scheduleId, patch) {
-  const schedule = getSchedule(scheduleId);
+  const schedule = labRepository.getSchedule(scheduleId);
   if (!schedule) {
     throw new HttpError(404, 'Schedule not found.');
   }
@@ -189,31 +162,31 @@ export function updateScheduleRecord(scheduleId, patch) {
     assertProjectExists(patch.projectId);
   }
 
-  return updateSchedule(scheduleId, patch);
+  return labRepository.updateSchedule(scheduleId, patch);
 }
 
 export function deleteScheduleRecord(scheduleId) {
-  if (!deleteSchedule(scheduleId)) {
+  if (!labRepository.deleteSchedule(scheduleId)) {
     throw new HttpError(404, 'Schedule not found.');
   }
 }
 
 export function createTimetableBlockRecord(payload) {
   assertUserExists(payload.userId);
-  return createTimetableBlock(payload);
+  return labRepository.createTimetableBlock(payload);
 }
 
 export function updateUserRoleRecord(userId, role) {
-  const user = getUser(userId);
+  const user = labRepository.getUser(userId);
   if (!user) {
     throw new HttpError(404, 'User not found.');
   }
 
-  return updateUserRole(userId, role);
+  return labRepository.updateUserRole(userId, role);
 }
 
 function assertProjectExists(projectId) {
-  const project = getProject(projectId);
+  const project = labRepository.getProject(projectId);
   if (!project) {
     throw new HttpError(404, 'Project not found.');
   }
@@ -222,7 +195,7 @@ function assertProjectExists(projectId) {
 }
 
 function assertUserExists(userId) {
-  if (!getUsers().some((entry) => entry.id === userId)) {
+  if (!labRepository.getUsers().some((entry) => entry.id === userId)) {
     throw new HttpError(400, `Unknown userId: ${userId}.`);
   }
 }
@@ -234,7 +207,7 @@ function assertUsersExist(userIds) {
 }
 
 function assertDocumentBelongsToProject(documentId, projectId) {
-  const document = getDocument(documentId);
+  const document = labRepository.getDocument(documentId);
   if (!document || document.projectId !== projectId) {
     throw new HttpError(400, `Document ${documentId} does not belong to project ${projectId}.`);
   }
@@ -242,7 +215,7 @@ function assertDocumentBelongsToProject(documentId, projectId) {
 
 function assertTasksBelongToProject(taskIds, projectId) {
   for (const taskId of taskIds) {
-    const task = getTask(taskId);
+    const task = labRepository.getTask(taskId);
     if (!task || task.projectId !== projectId) {
       throw new HttpError(400, `Task ${taskId} does not belong to project ${projectId}.`);
     }
