@@ -8,13 +8,20 @@ This project now has a minimal backend layer for the lab workflow domain.
 - New backend routes: `backend/routes/lab-api.mjs`
 - Service layer: `backend/services/lab-service.mjs`
 - Repository layer: `backend/repositories/lab-repository.mjs`
+- File repository: `backend/repositories/file-lab-repository.mjs`
+- Prisma repository: `backend/repositories/prisma-lab-repository.mjs`
 - File-based persistence: `backend/data/store.mjs`
 - Seed data source: `backend/data/seed.mjs`
 - Request validation: `backend/lib/validation.mjs`
 - Prisma config: `prisma.config.ts`
 - Prisma schema: `prisma/schema.prisma`
 
-The backend uses a JSON file store (`backend/data/lab-data.json`) that is created automatically on first request. This keeps the first backend iteration simple while still introducing the right separation:
+The backend can now switch persistence drivers with `LAB_REPOSITORY_DRIVER`:
+
+- `file`: JSON file store at `backend/data/lab-data.json`
+- `prisma`: PostgreSQL via Prisma, with automatic first-run seed data
+
+The file store is still the default. This keeps the live app simple while the database path is introduced behind the same repository contract:
 
 - route handling
 - input validation
@@ -56,13 +63,23 @@ The frontend now bootstraps its core lab data from `/api/lab/bootstrap` and writ
 
 That means the app has started the transition from mock-only state to API-backed state, while still keeping the UI responsive.
 
-Prisma is now scaffolded as the next persistence target, but the live application still uses the file-backed repository. This is intentional: the schema can evolve and be validated before the repository implementation is switched over.
+Prisma is no longer just scaffolded. The repository layer now has both file and Prisma implementations behind the same interface, so the app can switch drivers without changing frontend contracts.
+
+## Using the Prisma driver
+
+1. Start PostgreSQL and set `DATABASE_URL` in `.env`.
+2. Run `npm run prisma:generate`.
+3. Run `npm run prisma:db:push` to apply the current schema.
+4. Set `LAB_REPOSITORY_DRIVER=prisma`.
+5. Start the server with `npm run dev` or `npm run dev:server`.
+
+If PostgreSQL is not reachable, the API now returns `503 Database connection failed` instead of a generic `500`.
 
 The next iterations can now be done in a controlled order:
 
 1. Replace the remaining local-only mutations with backend endpoints where needed.
 2. Add authentication and current-user handling.
-3. Replace the JSON file store with a real database such as PostgreSQL.
+3. Add Prisma migrations and move from fallback seeding to explicit database setup.
 4. Move validation and domain rules into dedicated services as the app grows.
 5. Add tests for route validation and cross-entity consistency.
 

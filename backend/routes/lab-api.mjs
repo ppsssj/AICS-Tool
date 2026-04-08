@@ -40,12 +40,12 @@ export async function handleLabApiRequest(req, res, requestUrl) {
 
   try {
     if (req.method === 'GET' && requestUrl.pathname === '/api/lab/bootstrap') {
-      sendJson(res, 200, getLabBootstrap());
+      sendJson(res, 200, await getLabBootstrap());
       return true;
     }
 
     if (req.method === 'GET' && requestUrl.pathname === '/api/users') {
-      sendJson(res, 200, listUsers());
+      sendJson(res, 200, await listUsers());
       return true;
     }
 
@@ -119,13 +119,13 @@ export async function handleLabApiRequest(req, res, requestUrl) {
 
 async function handleProjectsCollection(req, res) {
   if (req.method === 'GET') {
-    sendJson(res, 200, listProjects());
+    sendJson(res, 200, await listProjects());
     return;
   }
 
   if (req.method === 'POST') {
     const payload = validateProjectInput(await readJsonBody(req));
-    const project = createProjectRecord(payload);
+    const project = await createProjectRecord(payload);
     sendJson(res, 201, project);
     return;
   }
@@ -135,7 +135,7 @@ async function handleProjectsCollection(req, res) {
 
 async function handleTimetableBlocksCollection(req, res) {
   const payload = validateTimetableBlockInput(await readJsonBody(req));
-  const timetableBlock = createTimetableBlockRecord(payload);
+  const timetableBlock = await createTimetableBlockRecord(payload);
   sendJson(res, 201, timetableBlock);
 }
 
@@ -145,7 +145,7 @@ async function handleSchedulesCollection(req, res) {
   }
 
   const payload = validateScheduleInput(await readJsonBody(req));
-  const schedule = createStandaloneScheduleRecord(payload);
+  const schedule = await createStandaloneScheduleRecord(payload);
   sendJson(res, 201, schedule);
 }
 
@@ -153,20 +153,20 @@ async function handleProjectItem(req, res, projectId) {
   validateIdentifier(projectId, 'projectId');
 
   if (req.method === 'GET') {
-    const bundle = getProjectBundleRecord(projectId);
+    const bundle = await getProjectBundleRecord(projectId);
     sendJson(res, 200, bundle);
     return;
   }
 
   if (req.method === 'PATCH') {
     const patch = validateProjectInput(await readJsonBody(req), { partial: true });
-    const project = updateProjectRecord(projectId, patch);
+    const project = await updateProjectRecord(projectId, patch);
     sendJson(res, 200, project);
     return;
   }
 
   if (req.method === 'DELETE') {
-    deleteProjectRecord(projectId);
+    await deleteProjectRecord(projectId);
     sendEmpty(res);
     return;
   }
@@ -176,13 +176,13 @@ async function handleProjectItem(req, res, projectId) {
 
 async function handleProjectTasks(req, res, projectId) {
   if (req.method === 'GET') {
-    sendJson(res, 200, listProjectTasks(projectId));
+    sendJson(res, 200, await listProjectTasks(projectId));
     return;
   }
 
   if (req.method === 'POST') {
     const payload = validateTaskInput(await readJsonBody(req));
-    const task = createProjectTaskRecord(projectId, payload);
+    const task = await createProjectTaskRecord(projectId, payload);
     sendJson(res, 201, task);
     return;
   }
@@ -193,13 +193,13 @@ async function handleProjectTasks(req, res, projectId) {
 async function handleTaskItem(req, res, taskId) {
   if (req.method === 'PATCH') {
     const patch = validateTaskInput(await readJsonBody(req), { partial: true });
-    const updatedTask = updateTaskRecord(taskId, patch);
+    const updatedTask = await updateTaskRecord(taskId, patch);
     sendJson(res, 200, updatedTask);
     return;
   }
 
   if (req.method === 'DELETE') {
-    deleteTaskRecord(taskId);
+    await deleteTaskRecord(taskId);
     sendEmpty(res);
     return;
   }
@@ -209,13 +209,13 @@ async function handleTaskItem(req, res, taskId) {
 
 async function handleProjectDocuments(req, res, projectId) {
   if (req.method === 'GET') {
-    sendJson(res, 200, listProjectDocuments(projectId));
+    sendJson(res, 200, await listProjectDocuments(projectId));
     return;
   }
 
   if (req.method === 'POST') {
     const payload = validateDocumentInput(await readJsonBody(req));
-    const document = createProjectDocumentRecord(projectId, payload);
+    const document = await createProjectDocumentRecord(projectId, payload);
     sendJson(res, 201, document);
     return;
   }
@@ -226,13 +226,13 @@ async function handleProjectDocuments(req, res, projectId) {
 async function handleDocumentItem(req, res, documentId) {
   if (req.method === 'PATCH') {
     const patch = validateDocumentInput(await readJsonBody(req), { partial: true });
-    const updatedDocument = updateDocumentRecord(documentId, patch);
+    const updatedDocument = await updateDocumentRecord(documentId, patch);
     sendJson(res, 200, updatedDocument);
     return;
   }
 
   if (req.method === 'DELETE') {
-    deleteDocumentRecord(documentId);
+    await deleteDocumentRecord(documentId);
     sendEmpty(res);
     return;
   }
@@ -242,13 +242,13 @@ async function handleDocumentItem(req, res, documentId) {
 
 async function handleProjectSchedules(req, res, projectId) {
   if (req.method === 'GET') {
-    sendJson(res, 200, listProjectSchedules(projectId));
+    sendJson(res, 200, await listProjectSchedules(projectId));
     return;
   }
 
   if (req.method === 'POST') {
     const payload = validateScheduleInput(await readJsonBody(req));
-    const schedule = createProjectScheduleRecord(projectId, payload);
+    const schedule = await createProjectScheduleRecord(projectId, payload);
     sendJson(res, 201, schedule);
     return;
   }
@@ -259,13 +259,13 @@ async function handleProjectSchedules(req, res, projectId) {
 async function handleScheduleItem(req, res, scheduleId) {
   if (req.method === 'PATCH') {
     const patch = validateScheduleInput(await readJsonBody(req), { partial: true });
-    const updatedSchedule = updateScheduleRecord(scheduleId, patch);
+    const updatedSchedule = await updateScheduleRecord(scheduleId, patch);
     sendJson(res, 200, updatedSchedule);
     return;
   }
 
   if (req.method === 'DELETE') {
-    deleteScheduleRecord(scheduleId);
+    await deleteScheduleRecord(scheduleId);
     sendEmpty(res);
     return;
   }
@@ -276,7 +276,7 @@ async function handleScheduleItem(req, res, scheduleId) {
 async function handleUserRoleItem(req, res, userId) {
   if (req.method === 'PATCH') {
     const payload = validateUserRoleInput(await readJsonBody(req));
-    const updatedUser = updateUserRoleRecord(userId, payload.role);
+    const updatedUser = await updateUserRoleRecord(userId, payload.role);
     sendJson(res, 200, updatedUser);
     return;
   }

@@ -15,7 +15,6 @@ dist-ssr
 !.env.example
 *.local
 backend/data/lab-data.json
-prisma/generated/
 
 # Editor directories and files
 .vscode/*

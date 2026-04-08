@@ -46,6 +46,14 @@ export function handleApiError(res, error) {
     return;
   }
 
+  if (error?.code === 'ECONNREFUSED') {
+    sendJson(res, 503, {
+      error: 'Database connection failed.',
+      details: 'Check DATABASE_URL, start PostgreSQL, and apply the Prisma schema before using the prisma repository driver.',
+    });
+    return;
+  }
+
   console.error('[backend] unexpected error', error);
   sendJson(res, 500, { error: 'Internal server error.' });
 }

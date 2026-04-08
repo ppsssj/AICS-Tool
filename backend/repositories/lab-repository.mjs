@@ -1,59 +1,14 @@
-import {
-  createDocument,
-  createProject,
-  createSchedule,
-  createTask,
-  createTimetableBlock,
-  deleteDocument,
-  deleteProject,
-  deleteSchedule,
-  deleteTask,
-  getBootstrapData,
-  getDocument,
-  getProject,
-  getProjectBundle,
-  getProjectDocuments,
-  getProjectSchedules,
-  getProjects,
-  getProjectTasks,
-  getSchedule,
-  getTask,
-  getUser,
-  getUsers,
-  updateDocument,
-  updateProject,
-  updateSchedule,
-  updateTask,
-  updateUserRole,
-} from '../data/store.mjs';
+const REPOSITORY_DRIVER = process.env.LAB_REPOSITORY_DRIVER ?? 'file';
+const repositoryModule =
+  REPOSITORY_DRIVER === 'prisma'
+    ? await import('./prisma-lab-repository.mjs')
+    : await import('./file-lab-repository.mjs');
 
-// File-backed repository adapter.
-// Services should depend on this module instead of the file store directly.
-export const labRepository = {
-  getBootstrapData,
-  getUsers,
-  getUser,
-  getProjects,
-  getProject,
-  getProjectBundle,
-  createProject,
-  updateProject,
-  deleteProject,
-  getProjectTasks,
-  getTask,
-  createTask,
-  updateTask,
-  deleteTask,
-  getProjectDocuments,
-  getDocument,
-  createDocument,
-  updateDocument,
-  deleteDocument,
-  getProjectSchedules,
-  getSchedule,
-  createSchedule,
-  updateSchedule,
-  deleteSchedule,
-  createTimetableBlock,
-  updateUserRole,
-};
+export const labRepository =
+  REPOSITORY_DRIVER === 'prisma'
+    ? repositoryModule.prismaLabRepository
+    : repositoryModule.fileLabRepository;
+
+export function getRepositoryDriver() {
+  return REPOSITORY_DRIVER;
+}
