@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import http from 'node:http';
 import OpenAI from 'openai';
+import { handleLabApiRequest } from './backend/routes/lab-api.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -67,6 +68,10 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'POST' && requestUrl.pathname === '/api/assistant/chat') {
       await handleAssistantChat(req, res);
+      return;
+    }
+
+    if (await handleLabApiRequest(req, res, requestUrl)) {
       return;
     }
 

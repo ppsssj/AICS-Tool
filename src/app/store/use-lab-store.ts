@@ -3,69 +3,35 @@ import { persist } from 'zustand/middleware';
 import type {
   Document,
   Project,
-  ProjectStatus,
   Role,
   Schedule,
-  ScheduleType,
   Task,
-  TaskPriority,
-  TaskStatus,
   TimetableBlock,
-  TimetableBlockType,
   User,
-  Weekday,
 } from '@/entities/models';
+import {
+  createDocumentRequest,
+  createProjectRequest,
+  createScheduleRequest,
+  createTaskRequest,
+  createTimetableBlockRequest,
+  deleteDocumentRequest,
+  deleteProjectRequest,
+  deleteTaskRequest,
+  fetchLabBootstrap,
+  type DocumentInput,
+  type ProjectInput,
+  type ScheduleInput,
+  type TaskInput,
+  type TimetableBlockInput,
+  updateCurrentUserRoleRequest,
+  updateDocumentRequest,
+  updateProjectRequest,
+  updateTaskRequest,
+  updateTaskStatusRequest,
+} from '@/app/store/lab-api';
 import { mockDocuments, mockProjects, mockSchedules, mockTasks, mockTimetableBlocks, mockUsers } from '@/mock/data';
 import type { AppTheme } from '@/shared/lib/themes';
-
-interface ProjectInput {
-  title: string;
-  description: string;
-  status: ProjectStatus;
-  memberIds: string[];
-}
-
-interface DocumentInput {
-  projectId: string;
-  title: string;
-  body: string;
-  tags: string[];
-  authorId: string;
-  relatedTaskIds: string[];
-  attachments?: Document['attachments'];
-}
-
-interface TaskInput {
-  projectId: string;
-  title: string;
-  description: string;
-  status: TaskStatus;
-  priority: TaskPriority;
-  assigneeId: string;
-  dueDate: string;
-  documentId?: string;
-}
-
-interface ScheduleInput {
-  title: string;
-  type: ScheduleType;
-  projectId?: string;
-  ownerId?: string;
-  day: Weekday;
-  startTime: string;
-  endTime: string;
-  location: string;
-  note: string;
-}
-
-interface TimetableBlockInput {
-  userId: string;
-  day: Weekday;
-  startTime: string;
-  endTime: string;
-  category: TimetableBlockType;
-  title: string;
-}
 
 interface LabStore {
   users: User[];
@@ -80,6 +46,9 @@ interface LabStore {
   activeProjectId: string | null;
   activeDocumentId: string | null;
   recentProjectIds: string[];
+  hasHydratedFromServer: boolean;
+  isHydratingFromServer: boolean;
+  hydrateFromServer: () => Promise<void>;
   login: (email: string) => void;
   logout: () => void;
   createProject: (input: ProjectInput) => string;
@@ -90,7 +59,7 @@ interface LabStore {
   deleteDocument: (documentId: string) => void;
   createTask: (input: TaskInput) => void;
   updateTask: (taskId: string, input: TaskInput) => void;
-  updateTaskStatus: (taskId: string, status: TaskStatus) => void;
+  updateTaskStatus: (taskId: string, status: Task['status']) => void;
   deleteTask: (taskId: string) => void;
   createSchedule: (input: ScheduleInput) => void;
   createTimetableBlock: (input: TimetableBlockInput) => void;
@@ -135,6 +104,8 @@ function createInitialState() {
     activeProjectId: null as string | null,
     activeDocumentId: null as string | null,
     recentProjectIds: [] as string[],
+    hasHydratedFromServer: false,
+    isHydratingFromServer: false,
   };
 }
 
@@ -200,27 +171,132 @@ function syncDocumentLinks(tasks: Task[], documentId: string, relatedTaskIds: st
   });
 }
 
+function logSyncError(action: string, error: unknown) {
+  console.error(`[lab-store] ${action} sync failed`, error);
+}
+
+function mergeProject(projects: Project[], project: Project): Project[] {
+  return projects.some((entry) => entry.id === project.id)
+    ? projects.map((entry) => (entry.id === project.id ? project : entry))
+    : [project, ...projects];
+}
+
+function mergeDocument(documents: Document[], document: Document): Document[] {
+  return documents.some((entry) => entry.id === document.id)
+    ? documents.map((entry) => (entry.id === document.id ? document : entry))
+    : [document, ...documents];
+}
+
+function mergeTask(tasks: Task[], task: Task): Task[] {
+  return tasks.some((entry) => entry.id === task.id)
+    ? tasks.map((entry) => (entry.id === task.id ? task : entry))
+    : [task, ...tasks];
+}
+
+function mergeSchedule(schedules: Schedule[], schedule: Schedule): Schedule[] {
+  return schedules.some((entry) => entry.id === schedule.id)
+    ? schedules.map((entry) => (entry.id === schedule.id ? schedule : entry))
+    : [schedule, ...schedules];
+}
+
+function mergeTimetableBlock(timetableBlocks: TimetableBlock[], timetableBlock: TimetableBlock): TimetableBlock[] {
+  return timetableBlocks.some((entry) => entry.id === timetableBlock.id)
+    ? timetableBlocks.map((entry) => (entry.id === timetableBlock.id ? timetableBlock : entry))
+    : [timetableBlock, ...timetableBlocks];
+}
+
+function mergeUser(users: User[], user: User): User[] {
+  return users.map((entry) => (entry.id === user.id ? user : entry));
+}
+
 export const useLabStore = create<LabStore>()(
   persist(
     (set, get) => ({
       ...createInitialState(),
+      hydrateFromServer: async () => {
+        if (get().isHydratingFromServer || get().hasHydratedFromServer) {
+          return;
+        }
+
+        set({ isHydratingFromServer: true });
+
+        try {
+          const payload = await fetchLabBootstrap();
+
+          set((state) => {
+            const currentUserId = payload.users.some((user) => user.id === state.currentUserId)
+              ? state.currentUserId
+              : payload.users[0]?.id ?? null;
+            const activeProjectId = payload.projects.some((project) => project.id === state.activeProjectId)
+              ? state.activeProjectId
+              : null;
+            const activeDocumentId = payload.documents.some((document) => document.id === state.activeDocumentId)
+              ? state.activeDocumentId
+              : null;
+            const recentProjectIds = state.recentProjectIds.filter((projectId) =>
+              payload.projects.some((project) => project.id === projectId),
+            );
+
+            return {
+              users: payload.users,
+              projects: payload.projects,
+              documents: payload.documents,
+              tasks: payload.tasks,
+              schedules: payload.schedules,
+              timetableBlocks: payload.timetableBlocks,
+              currentUserId,
+              activeProjectId,
+              activeDocumentId,
+              recentProjectIds,
+              hasHydratedFromServer: true,
+              isHydratingFromServer: false,
+            };
+          });
+        } catch (error) {
+          // In dev, the frontend can start before the backend proxy target is ready.
+          // Keep the local mock state and let the app retry quietly.
+          set({ isHydratingFromServer: false });
+        }
+      },
       login: (email) => {
         const match = get().users.find((user) => user.email.toLowerCase() === email.toLowerCase()) ?? get().users[2];
-        set({ currentUserId: match.id, isAuthenticated: true });
+        set({ currentUserId: match?.id ?? null, isAuthenticated: true });
       },
       logout: () => set({ isAuthenticated: false }),
       createProject: (input) => {
         const id = createId('p');
+        const project: Project = { id, ...input, updatedAt: now() };
+
         set((state) => ({
-          projects: [{ id, ...input, updatedAt: now() }, ...state.projects],
+          projects: [project, ...state.projects],
         }));
+
+        void createProjectRequest(id, input)
+          .then((serverProject) => {
+            set((state) => ({
+              projects: mergeProject(state.projects, serverProject),
+            }));
+          })
+          .catch((error) => logSyncError('createProject', error));
+
         return id;
       },
-      updateProject: (projectId, input) =>
+      updateProject: (projectId, input) => {
         set((state) => ({
-          projects: state.projects.map((project) => (project.id === projectId ? { ...project, ...input, updatedAt: now() } : project)),
-        })),
-      deleteProject: (projectId) =>
+          projects: state.projects.map((project) =>
+            project.id === projectId ? { ...project, ...input, updatedAt: now() } : project,
+          ),
+        }));
+
+        void updateProjectRequest(projectId, input)
+          .then((serverProject) => {
+            set((state) => ({
+              projects: mergeProject(state.projects, serverProject),
+            }));
+          })
+          .catch((error) => logSyncError('updateProject', error));
+      },
+      deleteProject: (projectId) => {
         set((state) => ({
           projects: state.projects.filter((project) => project.id !== projectId),
           documents: state.documents.filter((document) => document.projectId !== projectId),
@@ -232,46 +308,98 @@ export const useLabStore = create<LabStore>()(
               ? null
               : state.activeDocumentId,
           recentProjectIds: state.recentProjectIds.filter((value) => value !== projectId),
-        })),
+        }));
+
+        void deleteProjectRequest(projectId).catch((error) => logSyncError('deleteProject', error));
+      },
       createDocument: (input) => {
         const id = createId('d');
+        const document: Document = {
+          id,
+          ...input,
+          attachments: input.attachments ?? [],
+          updatedAt: now(),
+        };
+
         set((state) => ({
-          documents: [{ id, ...input, attachments: input.attachments ?? [], updatedAt: now() }, ...state.documents],
+          documents: [document, ...state.documents],
           tasks: syncDocumentLinks(state.tasks, id, input.relatedTaskIds),
-          projects: state.projects.map((project) => (project.id === input.projectId ? { ...project, updatedAt: now() } : project)),
+          projects: state.projects.map((project) =>
+            project.id === input.projectId ? { ...project, updatedAt: now() } : project,
+          ),
         }));
+
+        void createDocumentRequest(id, input)
+          .then((serverDocument) => {
+            set((state) => ({
+              documents: mergeDocument(state.documents, serverDocument),
+            }));
+          })
+          .catch((error) => logSyncError('createDocument', error));
+
         return id;
       },
-      updateDocument: (documentId, input) =>
+      updateDocument: (documentId, input) => {
         set((state) => ({
-          documents: state.documents.map((document) => (document.id === documentId ? { ...document, ...input, updatedAt: now() } : document)),
+          documents: state.documents.map((document) =>
+            document.id === documentId ? { ...document, ...input, updatedAt: now() } : document,
+          ),
           tasks: syncDocumentLinks(state.tasks, documentId, input.relatedTaskIds),
-          projects: state.projects.map((project) => (project.id === input.projectId ? { ...project, updatedAt: now() } : project)),
-        })),
-      deleteDocument: (documentId) =>
+          projects: state.projects.map((project) =>
+            project.id === input.projectId ? { ...project, updatedAt: now() } : project,
+          ),
+        }));
+
+        void updateDocumentRequest(documentId, input)
+          .then((serverDocument) => {
+            set((state) => ({
+              documents: mergeDocument(state.documents, serverDocument),
+            }));
+          })
+          .catch((error) => logSyncError('updateDocument', error));
+      },
+      deleteDocument: (documentId) => {
         set((state) => ({
           documents: state.documents.filter((document) => document.id !== documentId),
-          tasks: state.tasks.map((task) => (task.documentId === documentId ? { ...task, documentId: undefined, updatedAt: now() } : task)),
+          tasks: state.tasks.map((task) =>
+            task.documentId === documentId ? { ...task, documentId: undefined, updatedAt: now() } : task,
+          ),
           activeDocumentId: state.activeDocumentId === documentId ? null : state.activeDocumentId,
-        })),
-      createTask: (input) =>
-        set((state) => {
-          const taskId = createId('t');
-          return {
-            tasks: [{ id: taskId, ...input, updatedAt: now() }, ...state.tasks],
-            documents: input.documentId
-              ? state.documents.map((document) =>
-                  document.id === input.documentId
-                    ? { ...document, relatedTaskIds: [...document.relatedTaskIds, taskId], updatedAt: now() }
-                    : document,
-                )
-              : state.documents,
-            projects: state.projects.map((project) => (project.id === input.projectId ? { ...project, updatedAt: now() } : project)),
-          };
-        }),
-      updateTask: (taskId, input) =>
+        }));
+
+        void deleteDocumentRequest(documentId).catch((error) => logSyncError('deleteDocument', error));
+      },
+      createTask: (input) => {
+        const taskId = createId('t');
+        const task: Task = { id: taskId, ...input, updatedAt: now() };
+
         set((state) => ({
-          tasks: state.tasks.map((task) => (task.id === taskId ? { ...task, ...input, updatedAt: now() } : task)),
+          tasks: [task, ...state.tasks],
+          documents: input.documentId
+            ? state.documents.map((document) =>
+                document.id === input.documentId
+                  ? { ...document, relatedTaskIds: [...document.relatedTaskIds, taskId], updatedAt: now() }
+                  : document,
+              )
+            : state.documents,
+          projects: state.projects.map((project) =>
+            project.id === input.projectId ? { ...project, updatedAt: now() } : project,
+          ),
+        }));
+
+        void createTaskRequest(taskId, input)
+          .then((serverTask) => {
+            set((state) => ({
+              tasks: mergeTask(state.tasks, serverTask),
+            }));
+          })
+          .catch((error) => logSyncError('createTask', error));
+      },
+      updateTask: (taskId, input) => {
+        set((state) => ({
+          tasks: state.tasks.map((task) =>
+            task.id === taskId ? { ...task, ...input, updatedAt: now() } : task,
+          ),
           documents: state.documents.map((document) => {
             const shouldInclude = document.id === input.documentId;
             const taskAlreadyLinked = document.relatedTaskIds.includes(taskId);
@@ -281,28 +409,101 @@ export const useLabStore = create<LabStore>()(
             }
 
             if (!shouldInclude && taskAlreadyLinked) {
-              return { ...document, relatedTaskIds: document.relatedTaskIds.filter((id) => id !== taskId), updatedAt: now() };
+              return {
+                ...document,
+                relatedTaskIds: document.relatedTaskIds.filter((id) => id !== taskId),
+                updatedAt: now(),
+              };
             }
 
             return document;
           }),
-        })),
-      updateTaskStatus: (taskId, status) =>
+        }));
+
+        void updateTaskRequest(taskId, input)
+          .then((serverTask) => {
+            set((state) => ({
+              tasks: mergeTask(state.tasks, serverTask),
+            }));
+          })
+          .catch((error) => logSyncError('updateTask', error));
+      },
+      updateTaskStatus: (taskId, status) => {
         set((state) => ({
-          tasks: state.tasks.map((task) => (task.id === taskId ? { ...task, status, updatedAt: now() } : task)),
-        })),
-      deleteTask: (taskId) =>
+          tasks: state.tasks.map((task) =>
+            task.id === taskId ? { ...task, status, updatedAt: now() } : task,
+          ),
+        }));
+
+        void updateTaskStatusRequest(taskId, status)
+          .then((serverTask) => {
+            set((state) => ({
+              tasks: mergeTask(state.tasks, serverTask),
+            }));
+          })
+          .catch((error) => logSyncError('updateTaskStatus', error));
+      },
+      deleteTask: (taskId) => {
         set((state) => ({
           tasks: state.tasks.filter((task) => task.id !== taskId),
-          documents: state.documents.map((document) => ({ ...document, relatedTaskIds: document.relatedTaskIds.filter((id) => id !== taskId) })),
-        })),
-      createSchedule: (input) => set((state) => ({ schedules: [{ id: createId('s'), ...input }, ...state.schedules] })),
-      createTimetableBlock: (input) =>
-        set((state) => ({ timetableBlocks: [{ id: createId('tb'), ...input }, ...state.timetableBlocks] })),
-      setCurrentUserRole: (role) =>
+          documents: state.documents.map((document) => ({
+            ...document,
+            relatedTaskIds: document.relatedTaskIds.filter((id) => id !== taskId),
+          })),
+        }));
+
+        void deleteTaskRequest(taskId).catch((error) => logSyncError('deleteTask', error));
+      },
+      createSchedule: (input) => {
+        const id = createId('s');
+        const schedule: Schedule = { id, ...input };
+
         set((state) => ({
-          users: state.users.map((user) => (user.id === state.currentUserId ? { ...user, role } : user)),
-        })),
+          schedules: [schedule, ...state.schedules],
+        }));
+
+        void createScheduleRequest(id, input)
+          .then((serverSchedule) => {
+            set((state) => ({
+              schedules: mergeSchedule(state.schedules, serverSchedule),
+            }));
+          })
+          .catch((error) => logSyncError('createSchedule', error));
+      },
+      createTimetableBlock: (input) => {
+        const id = createId('tb');
+        const timetableBlock: TimetableBlock = { id, ...input };
+
+        set((state) => ({
+          timetableBlocks: [timetableBlock, ...state.timetableBlocks],
+        }));
+
+        void createTimetableBlockRequest(id, input)
+          .then((serverTimetableBlock) => {
+            set((state) => ({
+              timetableBlocks: mergeTimetableBlock(state.timetableBlocks, serverTimetableBlock),
+            }));
+          })
+          .catch((error) => logSyncError('createTimetableBlock', error));
+      },
+      setCurrentUserRole: (role) => {
+        const userId = get().currentUserId;
+        if (!userId) {
+          return;
+        }
+
+        set((state) => ({
+          users: state.users.map((user) => (user.id === userId ? { ...user, role } : user)),
+        }));
+
+        void updateCurrentUserRoleRequest(userId, role)
+          .then((serverUser) => {
+            set((state) => ({
+              users: mergeUser(state.users, serverUser),
+            }));
+          })
+          .catch((error) => logSyncError('setCurrentUserRole', error));
+      },
       setAppTheme: (theme) => set({ appTheme: theme }),
       setActiveProjectContext: (projectId) =>
         set((state) => ({
@@ -313,7 +514,7 @@ export const useLabStore = create<LabStore>()(
     }),
     {
       name: 'lab-workflow-os',
-      version: 3,
+      version: 4,
       migrate: (persistedState) => sanitizePersistedState(persistedState),
       merge: (persistedState, currentState) => ({
         ...currentState,

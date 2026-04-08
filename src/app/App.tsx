@@ -13,10 +13,25 @@ import { SettingsPage } from '@/pages/settings-page';
 
 function ThemeEffect() {
   const appTheme = useLabStore((state) => state.appTheme);
+  const hydrateFromServer = useLabStore((state) => state.hydrateFromServer);
+  const hasHydratedFromServer = useLabStore((state) => state.hasHydratedFromServer);
+  const isHydratingFromServer = useLabStore((state) => state.isHydratingFromServer);
 
   useEffect(() => {
     document.documentElement.dataset.theme = appTheme;
   }, [appTheme]);
+
+  useEffect(() => {
+    if (hasHydratedFromServer || isHydratingFromServer) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      void hydrateFromServer();
+    }, 600);
+
+    return () => window.clearTimeout(timer);
+  }, [hasHydratedFromServer, hydrateFromServer, isHydratingFromServer]);
 
   return null;
 }
