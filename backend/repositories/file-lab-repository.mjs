@@ -19,12 +19,14 @@ import {
   getSchedule,
   getTask,
   getUser,
+  getUserByEmail,
   getUsers,
   updateDocument,
   updateProject,
   updateSchedule,
   updateTask,
   updateUserRole,
+  createUser,
 } from '../data/store.mjs';
 
 // File-backed repository adapter.
@@ -38,6 +40,12 @@ export const fileLabRepository = {
   },
   async getUser(userId) {
     return getUser(userId);
+  },
+  async getUserByEmail(email) {
+    return getUserByEmail(email);
+  },
+  async createUser(payload) {
+    return createUser(payload);
   },
   async getProjects() {
     return getProjects();

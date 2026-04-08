@@ -4,7 +4,8 @@ import { useLabStore } from '@/app/store/use-lab-store';
 import { AssistantWorkspacePanel } from '@/features/assistant/assistant-workspace-panel';
 import { roleLabels } from '@/shared/lib/labels';
 import { Button } from '@/shared/ui/button';
-import Logo from '../../../public/AI CS LAB Logo.png';
+
+const Logo = '/AI CS LAB Logo.png';
 const navItems = [
   { to: '/dashboard', label: '대시보드' },
   { to: '/projects', label: '프로젝트' },
@@ -375,7 +376,9 @@ export function AppLayout() {
                 <Button
                   variant="ghost"
                   className="mt-4 w-full justify-between border border-slate-200/85 bg-white/85 px-4 text-slate-700 hover:border-slate-300/90 hover:bg-white"
-                  onClick={logout}
+                  onClick={() => {
+                    void logout();
+                  }}
                 >
                   로그아웃
                   <span className="text-slate-400">{'>'}</span>

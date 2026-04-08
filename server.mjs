@@ -4,7 +4,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import http from 'node:http';
 import OpenAI from 'openai';
+import { handleAuthApiRequest } from './backend/routes/auth-api.mjs';
 import { handleLabApiRequest } from './backend/routes/lab-api.mjs';
+import { getAuthenticatedUser } from './backend/services/auth-service.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -66,7 +68,17 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    if (await handleAuthApiRequest(req, res, requestUrl)) {
+      return;
+    }
+
     if (req.method === 'POST' && requestUrl.pathname === '/api/assistant/chat') {
+      const sessionUser = await getAuthenticatedUser(req);
+      if (!sessionUser) {
+        sendJson(res, 401, { error: 'Authentication required.' });
+        return;
+      }
+
       await handleAssistantChat(req, res);
       return;
     }

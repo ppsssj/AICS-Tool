@@ -87,6 +87,26 @@ export function validateUserRoleInput(payload) {
   };
 }
 
+export function validateLoginInput(payload) {
+  const value = ensureObject(payload);
+
+  return {
+    email: readEmail(value, 'email'),
+    password: readPassword(value, 'password'),
+  };
+}
+
+export function validateRegisterInput(payload) {
+  const value = ensureObject(payload);
+
+  return {
+    name: readString(value, 'name'),
+    email: readEmail(value, 'email'),
+    title: readString(value, 'title'),
+    password: readPassword(value, 'password'),
+  };
+}
+
 export function validateIdentifier(value, label) {
   if (typeof value !== 'string' || !value.trim()) {
     throw new HttpError(400, `${label} is required.`);
@@ -250,6 +270,26 @@ function readNumber(value, key) {
   }
 
   return value[key];
+}
+
+function readEmail(value, key) {
+  const email = readString(value, key).toLowerCase();
+
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    throw new HttpError(400, `${key} must be a valid email address.`);
+  }
+
+  return email;
+}
+
+function readPassword(value, key) {
+  const password = readString(value, key);
+
+  if (password.length < 8) {
+    throw new HttpError(400, `${key} must be at least 8 characters long.`);
+  }
+
+  return password;
 }
 
 function compactDefined(value) {

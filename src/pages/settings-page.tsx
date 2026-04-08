@@ -136,7 +136,12 @@ export function SettingsPage() {
                   보호된 목업 워크스페이스에서 로그아웃하고 로그인 화면으로 돌아갑니다.
                 </p>
               </div>
-              <Button variant="danger" onClick={() => { logout(); navigate('/login'); }}>
+              <Button
+                variant="danger"
+                onClick={() => {
+                  void logout().finally(() => navigate('/login'));
+                }}
+              >
                 로그아웃
               </Button>
             </div>

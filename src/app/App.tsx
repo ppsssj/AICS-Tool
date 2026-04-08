@@ -13,16 +13,32 @@ import { SettingsPage } from '@/pages/settings-page';
 
 function ThemeEffect() {
   const appTheme = useLabStore((state) => state.appTheme);
+  const authStatus = useLabStore((state) => state.authStatus);
+  const hydrateSession = useLabStore((state) => state.hydrateSession);
   const hydrateFromServer = useLabStore((state) => state.hydrateFromServer);
   const hasHydratedFromServer = useLabStore((state) => state.hasHydratedFromServer);
   const isHydratingFromServer = useLabStore((state) => state.isHydratingFromServer);
+  const isAuthenticated = useLabStore((state) => state.isAuthenticated);
 
   useEffect(() => {
     document.documentElement.dataset.theme = appTheme;
   }, [appTheme]);
 
   useEffect(() => {
-    if (hasHydratedFromServer || isHydratingFromServer) {
+    if (authStatus !== 'idle') {
+      return;
+    }
+
+    void hydrateSession();
+  }, [authStatus, hydrateSession]);
+
+  useEffect(() => {
+    if (
+      authStatus !== 'ready' ||
+      !isAuthenticated ||
+      hasHydratedFromServer ||
+      isHydratingFromServer
+    ) {
       return;
     }
 
@@ -31,7 +47,7 @@ function ThemeEffect() {
     }, 600);
 
     return () => window.clearTimeout(timer);
-  }, [hasHydratedFromServer, hydrateFromServer, isHydratingFromServer]);
+  }, [authStatus, hasHydratedFromServer, hydrateFromServer, isAuthenticated, isHydratingFromServer]);
 
   return null;
 }

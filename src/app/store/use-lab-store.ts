@@ -11,6 +11,7 @@ import type {
 } from '@/entities/models';
 import {
   createDocumentRequest,
+  fetchSessionRequest,
   createProjectRequest,
   createScheduleRequest,
   createTaskRequest,
@@ -19,8 +20,12 @@ import {
   deleteProjectRequest,
   deleteTaskRequest,
   fetchLabBootstrap,
+  loginRequest,
+  logoutRequest,
   type DocumentInput,
   type ProjectInput,
+  registerRequest,
+  type RegisterInput,
   type ScheduleInput,
   type TaskInput,
   type TimetableBlockInput,
@@ -42,15 +47,18 @@ interface LabStore {
   timetableBlocks: TimetableBlock[];
   currentUserId: string | null;
   isAuthenticated: boolean;
+  authStatus: 'idle' | 'loading' | 'ready';
   appTheme: AppTheme;
   activeProjectId: string | null;
   activeDocumentId: string | null;
   recentProjectIds: string[];
   hasHydratedFromServer: boolean;
   isHydratingFromServer: boolean;
+  hydrateSession: () => Promise<void>;
   hydrateFromServer: () => Promise<void>;
-  login: (email: string) => void;
-  logout: () => void;
+  login: (email: string, password: string) => Promise<void>;
+  register: (input: RegisterInput) => Promise<void>;
+  logout: () => Promise<void>;
   createProject: (input: ProjectInput) => string;
   updateProject: (projectId: string, input: ProjectInput) => void;
   deleteProject: (projectId: string) => void;
@@ -78,8 +86,6 @@ type PersistedLabStore = Partial<
     | 'tasks'
     | 'schedules'
     | 'timetableBlocks'
-    | 'currentUserId'
-    | 'isAuthenticated'
     | 'appTheme'
     | 'activeProjectId'
     | 'activeDocumentId'
@@ -98,8 +104,9 @@ function createInitialState() {
     tasks: mockTasks,
     schedules: mockSchedules,
     timetableBlocks: mockTimetableBlocks,
-    currentUserId: 'u3' as string | null,
+    currentUserId: null as string | null,
     isAuthenticated: false,
+    authStatus: 'idle' as const,
     appTheme: 'silver' as AppTheme,
     activeProjectId: null as string | null,
     activeDocumentId: null as string | null,
@@ -126,12 +133,6 @@ function sanitizePersistedState(persisted: unknown): PersistedLabStore {
     timetableBlocks: Array.isArray(state.timetableBlocks)
       ? (state.timetableBlocks as LabStore['timetableBlocks'])
       : initialState.timetableBlocks,
-    currentUserId:
-      typeof state.currentUserId === 'string' || state.currentUserId === null
-        ? (state.currentUserId as string | null)
-        : initialState.currentUserId,
-    isAuthenticated:
-      typeof state.isAuthenticated === 'boolean' ? state.isAuthenticated : initialState.isAuthenticated,
     appTheme:
       state.appTheme === 'silver' ||
       state.appTheme === 'mist' ||
@@ -213,8 +214,52 @@ export const useLabStore = create<LabStore>()(
   persist(
     (set, get) => ({
       ...createInitialState(),
+      hydrateSession: async () => {
+        if (get().authStatus === 'loading') {
+          return;
+        }
+
+        set({ authStatus: 'loading' });
+
+        try {
+          const session = await fetchSessionRequest();
+
+          if (!session) {
+            set({
+              currentUserId: null,
+              isAuthenticated: false,
+              authStatus: 'ready',
+              hasHydratedFromServer: false,
+            });
+            return;
+          }
+
+          set((state) => ({
+            users: state.users.some((user) => user.id === session.user.id)
+              ? mergeUser(state.users, session.user)
+              : [session.user, ...state.users],
+            currentUserId: session.user.id,
+            isAuthenticated: true,
+            authStatus: 'ready',
+            hasHydratedFromServer:
+              state.currentUserId === session.user.id ? state.hasHydratedFromServer : false,
+          }));
+        } catch {
+          set({
+            currentUserId: null,
+            isAuthenticated: false,
+            authStatus: 'ready',
+            hasHydratedFromServer: false,
+          });
+        }
+      },
       hydrateFromServer: async () => {
-        if (get().isHydratingFromServer || get().hasHydratedFromServer) {
+        if (
+          !get().isAuthenticated ||
+          get().authStatus !== 'ready' ||
+          get().isHydratingFromServer ||
+          get().hasHydratedFromServer
+        ) {
           return;
         }
 
@@ -226,7 +271,7 @@ export const useLabStore = create<LabStore>()(
           set((state) => {
             const currentUserId = payload.users.some((user) => user.id === state.currentUserId)
               ? state.currentUserId
-              : payload.users[0]?.id ?? null;
+              : null;
             const activeProjectId = payload.projects.some((project) => project.id === state.activeProjectId)
               ? state.activeProjectId
               : null;
@@ -258,11 +303,62 @@ export const useLabStore = create<LabStore>()(
           set({ isHydratingFromServer: false });
         }
       },
-      login: (email) => {
-        const match = get().users.find((user) => user.email.toLowerCase() === email.toLowerCase()) ?? get().users[2];
-        set({ currentUserId: match?.id ?? null, isAuthenticated: true });
+      login: async (email, password) => {
+        set({ authStatus: 'loading' });
+        try {
+          const session = await loginRequest({ email, password });
+
+          set((state) => ({
+            users: state.users.some((user) => user.id === session.user.id)
+              ? mergeUser(state.users, session.user)
+              : [session.user, ...state.users],
+            currentUserId: session.user.id,
+            isAuthenticated: true,
+            authStatus: 'ready',
+            hasHydratedFromServer: false,
+            activeProjectId: null,
+            activeDocumentId: null,
+          }));
+        } catch (error) {
+          set({ authStatus: 'ready', isAuthenticated: false, currentUserId: null });
+          throw error;
+        }
       },
-      logout: () => set({ isAuthenticated: false }),
+      register: async (input) => {
+        set({ authStatus: 'loading' });
+        try {
+          const session = await registerRequest(input);
+
+          set((state) => ({
+            users: state.users.some((user) => user.id === session.user.id)
+              ? mergeUser(state.users, session.user)
+              : [session.user, ...state.users],
+            currentUserId: session.user.id,
+            isAuthenticated: true,
+            authStatus: 'ready',
+            hasHydratedFromServer: false,
+            activeProjectId: null,
+            activeDocumentId: null,
+          }));
+        } catch (error) {
+          set({ authStatus: 'ready', isAuthenticated: false, currentUserId: null });
+          throw error;
+        }
+      },
+      logout: async () => {
+        try {
+          await logoutRequest();
+        } catch (error) {
+          logSyncError('logout', error);
+        }
+
+        const initialState = createInitialState();
+        set({
+          ...initialState,
+          appTheme: get().appTheme,
+          authStatus: 'ready',
+        });
+      },
       createProject: (input) => {
         const id = createId('p');
         const project: Project = { id, ...input, updatedAt: now() };
@@ -514,7 +610,7 @@ export const useLabStore = create<LabStore>()(
     }),
     {
       name: 'lab-workflow-os',
-      version: 4,
+      version: 5,
       migrate: (persistedState) => sanitizePersistedState(persistedState),
       merge: (persistedState, currentState) => ({
         ...currentState,
@@ -527,8 +623,6 @@ export const useLabStore = create<LabStore>()(
         tasks: state.tasks,
         schedules: state.schedules,
         timetableBlocks: state.timetableBlocks,
-        currentUserId: state.currentUserId,
-        isAuthenticated: state.isAuthenticated,
         appTheme: state.appTheme,
         activeProjectId: state.activeProjectId,
         activeDocumentId: state.activeDocumentId,

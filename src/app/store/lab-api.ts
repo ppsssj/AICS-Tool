@@ -14,6 +14,20 @@ import type {
   Weekday,
 } from '@/entities/models';
 
+export interface AuthInput {
+  email: string;
+  password: string;
+}
+
+export interface RegisterInput extends AuthInput {
+  name: string;
+  title: string;
+}
+
+export interface SessionResponse {
+  user: User;
+}
+
 export interface ProjectInput {
   title: string;
   description: string;
@@ -74,6 +88,7 @@ export interface LabBootstrapResponse {
 
 async function request<T>(input: string, init?: RequestInit): Promise<T> {
   const response = await fetch(input, {
+    credentials: 'same-origin',
     headers: {
       'Content-Type': 'application/json',
       ...(init?.headers ?? {}),
@@ -101,8 +116,57 @@ async function request<T>(input: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
+async function requestSession(): Promise<SessionResponse | null> {
+  const response = await fetch('/api/auth/session', {
+    credentials: 'same-origin',
+  });
+
+  if (response.status === 401) {
+    return null;
+  }
+
+  if (!response.ok) {
+    let message = 'Request failed.';
+
+    try {
+      const payload = (await response.json()) as { error?: string };
+      message = payload.error || message;
+    } catch {
+      // Keep the generic message when the response body is not JSON.
+    }
+
+    throw new Error(message);
+  }
+
+  return (await response.json()) as SessionResponse;
+}
+
 export function fetchLabBootstrap() {
   return request<LabBootstrapResponse>('/api/lab/bootstrap');
+}
+
+export function fetchSessionRequest() {
+  return requestSession();
+}
+
+export function loginRequest(input: AuthInput) {
+  return request<SessionResponse>('/api/auth/login', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export function registerRequest(input: RegisterInput) {
+  return request<SessionResponse>('/api/auth/register', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export function logoutRequest() {
+  return request<void>('/api/auth/logout', {
+    method: 'POST',
+  });
 }
 
 export function createProjectRequest(id: string, input: ProjectInput) {

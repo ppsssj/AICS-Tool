@@ -1,4 +1,5 @@
 import { handleApiError, HttpError, readJsonBody, sendEmpty, sendJson } from '../lib/http.mjs';
+import { requireAuthenticatedUser } from '../services/auth-service.mjs';
 import {
   createProjectDocumentRecord,
   createProjectRecord,
@@ -39,6 +40,8 @@ export async function handleLabApiRequest(req, res, requestUrl) {
   }
 
   try {
+    await requireAuthenticatedUser(req);
+
     if (req.method === 'GET' && requestUrl.pathname === '/api/lab/bootstrap') {
       sendJson(res, 200, await getLabBootstrap());
       return true;

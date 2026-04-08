@@ -116,6 +116,26 @@ export function getUser(userId) {
   return readStore().users.find((entry) => entry.id === userId) ?? null;
 }
 
+export function getUserByEmail(email) {
+  return readStore().users.find((entry) => entry.email.toLowerCase() === email.toLowerCase()) ?? null;
+}
+
+export function createUser(input) {
+  const store = readStore();
+  const user = {
+    id: input.id ?? createId('u'),
+    name: input.name,
+    email: input.email,
+    role: input.role,
+    title: input.title,
+  };
+
+  store.users.push(user);
+  writeStore(store);
+
+  return user;
+}
+
 export function getProjects() {
   const store = readStore();
 

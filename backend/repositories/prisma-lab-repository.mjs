@@ -368,6 +368,29 @@ export const prismaLabRepository = {
     return user ? serializeUser(user) : null;
   },
 
+  async getUserByEmail(email) {
+    await ensurePrismaSeeded();
+    const user = await prisma.user.findUnique({
+      where: { email: email.toLowerCase() },
+    });
+    return user ? serializeUser(user) : null;
+  },
+
+  async createUser(payload) {
+    await ensurePrismaSeeded();
+    const user = await prisma.user.create({
+      data: {
+        id: payload.id ?? createId('u'),
+        name: payload.name,
+        email: payload.email.toLowerCase(),
+        role: payload.role,
+        title: payload.title,
+      },
+    });
+
+    return serializeUser(user);
+  },
+
   async getProjects() {
     await ensurePrismaSeeded();
 

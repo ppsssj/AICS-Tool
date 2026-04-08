@@ -34,7 +34,7 @@ interface AssistantWorkspacePanelProps {
   deleteDocument: (documentId: string) => void;
   deleteTask: (taskId: string) => void;
   updateTaskStatus: (taskId: string, status: 'Todo' | 'In Progress' | 'Review' | 'Done') => void;
-  logout?: () => void;
+  logout?: () => void | Promise<void>;
   setAppTheme?: (theme: AppTheme) => void;
   setActiveProjectContext: (projectId: string | null) => void;
   setActiveDocumentContext: (documentId: string | null) => void;

@@ -33,6 +33,10 @@ The file store is still the default. This keeps the live app simple while the da
 ## Available endpoints
 
 - `GET /api/health`
+- `GET /api/auth/session`
+- `POST /api/auth/login`
+- `POST /api/auth/register`
+- `POST /api/auth/logout`
 - `GET /api/lab/bootstrap`
 - `GET /api/users`
 - `PATCH /api/users/:userId/role`
@@ -56,6 +60,17 @@ The file store is still the default. This keeps the live app simple while the da
 - `DELETE /api/schedules/:scheduleId`
 - `POST /api/timetable-blocks`
 - `POST /api/assistant/chat`
+
+## Authentication
+
+Authentication now uses a simple server-side session flow:
+
+- credentials and active sessions are stored in `backend/data/auth-data.json`
+- the browser receives an `HttpOnly` cookie after login or registration
+- all lab workflow endpoints require an authenticated session
+- the bundled seed users are available with password `password`
+
+The frontend now restores the session from `/api/auth/session` before loading protected app routes.
 
 ## Why this step matters
 
