@@ -11,6 +11,8 @@ This project now has a minimal backend layer for the lab workflow domain.
 - File-based persistence: `backend/data/store.mjs`
 - Seed data source: `backend/data/seed.mjs`
 - Request validation: `backend/lib/validation.mjs`
+- Prisma config: `prisma.config.ts`
+- Prisma schema: `prisma/schema.prisma`
 
 The backend uses a JSON file store (`backend/data/lab-data.json`) that is created automatically on first request. This keeps the first backend iteration simple while still introducing the right separation:
 
@@ -53,6 +55,8 @@ The backend uses a JSON file store (`backend/data/lab-data.json`) that is create
 The frontend now bootstraps its core lab data from `/api/lab/bootstrap` and writes create/update/delete actions back to the backend with optimistic local updates.
 
 That means the app has started the transition from mock-only state to API-backed state, while still keeping the UI responsive.
+
+Prisma is now scaffolded as the next persistence target, but the live application still uses the file-backed repository. This is intentional: the schema can evolve and be validated before the repository implementation is switched over.
 
 The next iterations can now be done in a controlled order:
 

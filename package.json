@@ -8,10 +8,14 @@
     "dev:client": "vite",
     "dev:server": "node server.mjs",
     "build": "tsc -b && vite build",
+    "prisma:validate": "prisma validate",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate:dev": "prisma migrate dev",
     "preview": "vite preview",
     "serve": "node server.mjs"
   },
   "dependencies": {
+    "@prisma/client": "^7.7.0",
     "dotenv": "^17.2.3",
     "openai": "^6.5.0",
     "react": "^19.1.1",
@@ -28,6 +32,7 @@
     "concurrently": "^9.2.1",
     "picomatch": "^4.0.3",
     "postcss": "^8.5.6",
+    "prisma": "^7.7.0",
     "tailwindcss": "^3.4.17",
     "typescript": "~5.9.3",
     "vite": "^7.3.1"
