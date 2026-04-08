@@ -1,32 +1,28 @@
-import {
-  createDocument,
-  createProject,
-  createSchedule,
-  createTask,
-  createTimetableBlock,
-  deleteDocument,
-  deleteProject,
-  deleteSchedule,
-  deleteTask,
-  getBootstrapData,
-  getDocument,
-  getProject,
-  getProjectBundle,
-  getProjectDocuments,
-  getProjectSchedules,
-  getProjects,
-  getProjectTasks,
-  getSchedule,
-  getTask,
-  getUser,
-  getUsers,
-  updateDocument,
-  updateProject,
-  updateSchedule,
-  updateTask,
-  updateUserRole,
-} from '../data/store.mjs';
 import { handleApiError, HttpError, readJsonBody, sendEmpty, sendJson } from '../lib/http.mjs';
+import {
+  createProjectDocumentRecord,
+  createProjectRecord,
+  createProjectScheduleRecord,
+  createProjectTaskRecord,
+  createStandaloneScheduleRecord,
+  createTimetableBlockRecord,
+  deleteDocumentRecord,
+  deleteProjectRecord,
+  deleteScheduleRecord,
+  deleteTaskRecord,
+  getLabBootstrap,
+  getProjectBundleRecord,
+  listProjectDocuments,
+  listProjectSchedules,
+  listProjects,
+  listProjectTasks,
+  listUsers,
+  updateDocumentRecord,
+  updateProjectRecord,
+  updateScheduleRecord,
+  updateTaskRecord,
+  updateUserRoleRecord,
+} from '../services/lab-service.mjs';
 import {
   validateDocumentInput,
   validateIdentifier,
@@ -44,12 +40,12 @@ export async function handleLabApiRequest(req, res, requestUrl) {
 
   try {
     if (req.method === 'GET' && requestUrl.pathname === '/api/lab/bootstrap') {
-      sendJson(res, 200, getBootstrapData());
+      sendJson(res, 200, getLabBootstrap());
       return true;
     }
 
     if (req.method === 'GET' && requestUrl.pathname === '/api/users') {
-      sendJson(res, 200, getUsers());
+      sendJson(res, 200, listUsers());
       return true;
     }
 
@@ -123,14 +119,13 @@ export async function handleLabApiRequest(req, res, requestUrl) {
 
 async function handleProjectsCollection(req, res) {
   if (req.method === 'GET') {
-    sendJson(res, 200, getProjects());
+    sendJson(res, 200, listProjects());
     return;
   }
 
   if (req.method === 'POST') {
     const payload = validateProjectInput(await readJsonBody(req));
-    assertUsersExist(payload.memberIds);
-    const project = createProject(payload);
+    const project = createProjectRecord(payload);
     sendJson(res, 201, project);
     return;
   }
@@ -140,8 +135,7 @@ async function handleProjectsCollection(req, res) {
 
 async function handleTimetableBlocksCollection(req, res) {
   const payload = validateTimetableBlockInput(await readJsonBody(req));
-  assertUserExists(payload.userId);
-  const timetableBlock = createTimetableBlock(payload);
+  const timetableBlock = createTimetableBlockRecord(payload);
   sendJson(res, 201, timetableBlock);
 }
 
@@ -151,18 +145,7 @@ async function handleSchedulesCollection(req, res) {
   }
 
   const payload = validateScheduleInput(await readJsonBody(req));
-  if (payload.ownerId) {
-    assertUserExists(payload.ownerId);
-  }
-
-  if (payload.projectId) {
-    const project = getProject(payload.projectId);
-    if (!project) {
-      throw new HttpError(400, `Unknown projectId: ${payload.projectId}.`);
-    }
-  }
-
-  const schedule = createSchedule(payload);
+  const schedule = createStandaloneScheduleRecord(payload);
   sendJson(res, 201, schedule);
 }
 
@@ -170,32 +153,20 @@ async function handleProjectItem(req, res, projectId) {
   validateIdentifier(projectId, 'projectId');
 
   if (req.method === 'GET') {
-    const bundle = getProjectBundle(projectId);
-    if (!bundle) {
-      throw new HttpError(404, 'Project not found.');
-    }
-
+    const bundle = getProjectBundleRecord(projectId);
     sendJson(res, 200, bundle);
     return;
   }
 
   if (req.method === 'PATCH') {
-    const existing = getProject(projectId);
-    if (!existing) {
-      throw new HttpError(404, 'Project not found.');
-    }
-
     const patch = validateProjectInput(await readJsonBody(req), { partial: true });
-    const project = updateProject(projectId, patch);
+    const project = updateProjectRecord(projectId, patch);
     sendJson(res, 200, project);
     return;
   }
 
   if (req.method === 'DELETE') {
-    if (!deleteProject(projectId)) {
-      throw new HttpError(404, 'Project not found.');
-    }
-
+    deleteProjectRecord(projectId);
     sendEmpty(res);
     return;
   }
@@ -204,24 +175,14 @@ async function handleProjectItem(req, res, projectId) {
 }
 
 async function handleProjectTasks(req, res, projectId) {
-  const project = getProject(projectId);
-  if (!project) {
-    throw new HttpError(404, 'Project not found.');
-  }
-
   if (req.method === 'GET') {
-    sendJson(res, 200, getProjectTasks(projectId));
+    sendJson(res, 200, listProjectTasks(projectId));
     return;
   }
 
   if (req.method === 'POST') {
     const payload = validateTaskInput(await readJsonBody(req));
-    assertUserExists(payload.assigneeId);
-    if (payload.documentId !== null && payload.documentId !== undefined) {
-      assertDocumentBelongsToProject(payload.documentId, projectId);
-    }
-
-    const task = createTask(projectId, payload);
+    const task = createProjectTaskRecord(projectId, payload);
     sendJson(res, 201, task);
     return;
   }
@@ -230,28 +191,15 @@ async function handleProjectTasks(req, res, projectId) {
 }
 
 async function handleTaskItem(req, res, taskId) {
-  const task = getTask(taskId);
-  if (!task) {
-    throw new HttpError(404, 'Task not found.');
-  }
-
   if (req.method === 'PATCH') {
     const patch = validateTaskInput(await readJsonBody(req), { partial: true });
-    if (patch.assigneeId) {
-      assertUserExists(patch.assigneeId);
-    }
-
-    if (patch.documentId !== undefined && patch.documentId !== null) {
-      assertDocumentBelongsToProject(patch.documentId, task.projectId);
-    }
-
-    const updatedTask = updateTask(taskId, patch);
+    const updatedTask = updateTaskRecord(taskId, patch);
     sendJson(res, 200, updatedTask);
     return;
   }
 
   if (req.method === 'DELETE') {
-    deleteTask(taskId);
+    deleteTaskRecord(taskId);
     sendEmpty(res);
     return;
   }
@@ -260,22 +208,14 @@ async function handleTaskItem(req, res, taskId) {
 }
 
 async function handleProjectDocuments(req, res, projectId) {
-  const project = getProject(projectId);
-  if (!project) {
-    throw new HttpError(404, 'Project not found.');
-  }
-
   if (req.method === 'GET') {
-    sendJson(res, 200, getProjectDocuments(projectId));
+    sendJson(res, 200, listProjectDocuments(projectId));
     return;
   }
 
   if (req.method === 'POST') {
     const payload = validateDocumentInput(await readJsonBody(req));
-    assertUserExists(payload.authorId);
-    assertTasksBelongToProject(payload.relatedTaskIds, projectId);
-
-    const document = createDocument(projectId, payload);
+    const document = createProjectDocumentRecord(projectId, payload);
     sendJson(res, 201, document);
     return;
   }
@@ -284,28 +224,15 @@ async function handleProjectDocuments(req, res, projectId) {
 }
 
 async function handleDocumentItem(req, res, documentId) {
-  const document = getDocument(documentId);
-  if (!document) {
-    throw new HttpError(404, 'Document not found.');
-  }
-
   if (req.method === 'PATCH') {
     const patch = validateDocumentInput(await readJsonBody(req), { partial: true });
-    if (patch.authorId) {
-      assertUserExists(patch.authorId);
-    }
-
-    if (patch.relatedTaskIds) {
-      assertTasksBelongToProject(patch.relatedTaskIds, document.projectId);
-    }
-
-    const updatedDocument = updateDocument(documentId, patch);
+    const updatedDocument = updateDocumentRecord(documentId, patch);
     sendJson(res, 200, updatedDocument);
     return;
   }
 
   if (req.method === 'DELETE') {
-    deleteDocument(documentId);
+    deleteDocumentRecord(documentId);
     sendEmpty(res);
     return;
   }
@@ -314,23 +241,14 @@ async function handleDocumentItem(req, res, documentId) {
 }
 
 async function handleProjectSchedules(req, res, projectId) {
-  const project = getProject(projectId);
-  if (!project) {
-    throw new HttpError(404, 'Project not found.');
-  }
-
   if (req.method === 'GET') {
-    sendJson(res, 200, getProjectSchedules(projectId));
+    sendJson(res, 200, listProjectSchedules(projectId));
     return;
   }
 
   if (req.method === 'POST') {
     const payload = validateScheduleInput(await readJsonBody(req));
-    if (payload.ownerId) {
-      assertUserExists(payload.ownerId);
-    }
-
-    const schedule = createSchedule({ ...payload, projectId });
+    const schedule = createProjectScheduleRecord(projectId, payload);
     sendJson(res, 201, schedule);
     return;
   }
@@ -339,24 +257,15 @@ async function handleProjectSchedules(req, res, projectId) {
 }
 
 async function handleScheduleItem(req, res, scheduleId) {
-  const schedule = getSchedule(scheduleId);
-  if (!schedule) {
-    throw new HttpError(404, 'Schedule not found.');
-  }
-
   if (req.method === 'PATCH') {
     const patch = validateScheduleInput(await readJsonBody(req), { partial: true });
-    if (patch.ownerId) {
-      assertUserExists(patch.ownerId);
-    }
-
-    const updatedSchedule = updateSchedule(scheduleId, patch);
+    const updatedSchedule = updateScheduleRecord(scheduleId, patch);
     sendJson(res, 200, updatedSchedule);
     return;
   }
 
   if (req.method === 'DELETE') {
-    deleteSchedule(scheduleId);
+    deleteScheduleRecord(scheduleId);
     sendEmpty(res);
     return;
   }
@@ -365,45 +274,12 @@ async function handleScheduleItem(req, res, scheduleId) {
 }
 
 async function handleUserRoleItem(req, res, userId) {
-  const user = getUser(userId);
-  if (!user) {
-    throw new HttpError(404, 'User not found.');
-  }
-
   if (req.method === 'PATCH') {
     const payload = validateUserRoleInput(await readJsonBody(req));
-    const updatedUser = updateUserRole(userId, payload.role);
+    const updatedUser = updateUserRoleRecord(userId, payload.role);
     sendJson(res, 200, updatedUser);
     return;
   }
 
   throw new HttpError(405, 'Method not allowed.');
-}
-
-function assertUserExists(userId) {
-  if (!getUsers().some((entry) => entry.id === userId)) {
-    throw new HttpError(400, `Unknown userId: ${userId}.`);
-  }
-}
-
-function assertUsersExist(userIds) {
-  for (const userId of userIds) {
-    assertUserExists(userId);
-  }
-}
-
-function assertDocumentBelongsToProject(documentId, projectId) {
-  const document = getDocument(documentId);
-  if (!document || document.projectId !== projectId) {
-    throw new HttpError(400, `Document ${documentId} does not belong to project ${projectId}.`);
-  }
-}
-
-function assertTasksBelongToProject(taskIds, projectId) {
-  for (const taskId of taskIds) {
-    const task = getTask(taskId);
-    if (!task || task.projectId !== projectId) {
-      throw new HttpError(400, `Task ${taskId} does not belong to project ${projectId}.`);
-    }
-  }
 }
